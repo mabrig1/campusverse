@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import PrivacyPolicy, { hasAcceptedPolicy } from './PrivacyPolicy.jsx';
 
 // API Configuration
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
@@ -73,6 +74,8 @@ const Icons = {
 };
 
 export default function App() {
+  const [policyAccepted, setPolicyAccepted] = useState(hasAcceptedPolicy);
+
   const [currentTab, setCurrentTab] = useState('dashboard');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
@@ -569,6 +572,10 @@ export default function App() {
     setNewPostContent('');
     showToast('Post shared to campus news feed!');
   };
+
+  if (!policyAccepted) {
+    return <PrivacyPolicy onAccept={() => setPolicyAccepted(true)} />;
+  }
 
   return (
     <div className="app-container">
