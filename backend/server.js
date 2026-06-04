@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import { connectDB } from './db.js';
+import User from './models/User.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -223,6 +224,76 @@ const blacklistedIMEIs = ['357289110482937', '861002938172930'];
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'CampusVerse Engine active' });
+});
+
+// ── User Profile Routes ────────────────────────────────────────
+
+// GET /api/users/:regNo  — fetch public profile by registration number
+app.get('/api/users/:regNo', async (req, res) => {
+  try {
+    const user = await User.findOne({ regNo: req.params.regNo.toUpperCase() });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json(user.toPublicProfile());
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /api/users  — create a new user profile
+app.post('/api/users', async (req, res) => {
+  try {
+    const user = new User(req.body);
+    await user.save();
+    res.status(201).json(user.toPublicProfile());
+  } catch (err) {
+    if (err.code === 11000) {
+      const field = Object.keys(err.keyValue)[0];
+      return res.status(409).json({ error: `A user with this ${field} already exists.` });
+    }
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// PATCH /api/users/:regNo  — update description fields
+app.patch('/api/users/:regNo', async (req, res) => {
+  const allowed = ['bio', 'skills', 'avatarUrl', 'social', 'department', 'faculty', 'level', 'hostel', 'phone'];
+  const update = {};
+  allowed.forEach(key => { if (req.body[key] !== undefined) update[key] = req.body[key]; });
+
+  try {
+    const user = await User.findOneAndUpdate(
+      { regNo: req.params.regNo.toUpperCase() },
+      { $set: update },
+      { new: true, runValidators: true }
+    );
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json(user.toPublicProfile());
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/users/:regNo/consent  — record privacy policy acceptance
+app.post('/api/users/:regNo/consent', async (req, res) => {
+  const { policyVersion, ipAddress, userAgent } = req.body;
+  try {
+    const user = await User.findOneAndUpdate(
+      { regNo: req.params.regNo.toUpperCase() },
+      { $set: {
+          'privacyConsent.accepted':      true,
+          'privacyConsent.policyVersion': policyVersion,
+          'privacyConsent.acceptedAt':    new Date(),
+          'privacyConsent.ipAddress':     ipAddress  || '',
+          'privacyConsent.userAgent':     userAgent  || ''
+        }
+      },
+      { new: true }
+    );
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json({ success: true, acceptedAt: user.privacyConsent.acceptedAt });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Trust Score calculation API
