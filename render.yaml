@@ -1,0 +1,30 @@
+services:
+  # ── Backend API ─────────────────────────────────────────────
+  - type: web
+    name: campusverse-api
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    plan: free
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: MONGODB_URI
+        sync: false          # set manually in Render dashboard
+      - key: MONGODB_DB_NAME
+        value: campusverse_db
+      - key: JWT_SECRET
+        generateValue: true  # Render auto-generates a secure value
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: ALLOWED_ORIGINS
+        value: https://campusverse.store,https://www.campusverse.store
+      - key: RATE_LIMIT_WINDOW_MS
+        value: 900000
+      - key: RATE_LIMIT_MAX
+        value: 100
+    domains:
+      - api.campusverse.store   # add this custom domain in Render after deploy
