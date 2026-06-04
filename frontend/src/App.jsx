@@ -59,6 +59,16 @@ const Icons = {
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>
     </svg>
+  ),
+  User: () => (
+    <svg className="nav-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+    </svg>
+  ),
+  Edit: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+    </svg>
   )
 };
 
@@ -81,8 +91,24 @@ export default function App() {
     tradesCount: 3,
     disputeCount: 0,
     trustScore: 45,
-    trustLevel: 'Verified Student'
+    trustLevel: 'Verified Student',
+    // Profile description fields
+    bio: 'Computer Science student at UNN. Building tech solutions for campus life. I buy and sell gadgets, offer web development services, and connect students with opportunities.',
+    department: 'Faculty of Physical Sciences – Computer Science',
+    level: '300 Level',
+    email: 'o.eze@unn.edu.ng',
+    skills: ['React.js', 'Node.js', 'Python', 'UI Design'],
+    avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200',
+    twitter: '',
+    linkedin: '',
+    github: '',
+    joinedDate: 'January 2024',
+    totalReviews: 5,
+    rating: 4.8
   });
+
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [profileDraft, setProfileDraft] = useState(null);
 
   // DB States
   const [products, setProducts] = useState([]);
@@ -598,6 +624,9 @@ export default function App() {
           <a href="#" className={`nav-item ${currentTab === 'escrow' ? 'active' : ''}`} onClick={() => setCurrentTab('escrow')}>
             <Icons.Escrow /> <span>Escrow Engine</span>
           </a>
+          <a href="#" className={`nav-item ${currentTab === 'profile' ? 'active' : ''}`} onClick={() => setCurrentTab('profile')}>
+            <Icons.User /> <span>My Profile</span>
+          </a>
         </nav>
 
         <div className="sidebar-user">
@@ -620,6 +649,7 @@ export default function App() {
               {currentTab === 'directory' && 'Nsukka Business Directory'}
               {currentTab === 'trust' && 'Campus Biometric & Identity Trust'}
               {currentTab === 'escrow' && 'Escrow Payment Terminal'}
+              {currentTab === 'profile' && 'My Campus Profile'}
             </h1>
             <span className="page-subtitle">
               {currentTab === 'dashboard' && 'Social forums, news, and student interactions'}
@@ -628,6 +658,7 @@ export default function App() {
               {currentTab === 'directory' && 'Find verified restaurants, printing hubs, and shuttles'}
               {currentTab === 'trust' && 'Dynamic safety score calculation and fraud telemetry'}
               {currentTab === 'escrow' && 'Milestone escrow contract protection'}
+              {currentTab === 'profile' && 'Your public identity on the CampusVerse network'}
             </span>
           </div>
 
@@ -1368,6 +1399,292 @@ export default function App() {
             )}
           </div>
         )}
+        {/* My Profile Tab */}
+        {currentTab === 'profile' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: '24px', alignItems: 'start' }}>
+
+            {/* Left — Profile Card */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+              {/* Avatar + name card */}
+              <div className="glass-panel" style={{ padding: '28px', textAlign: 'center' }}>
+                <div style={{ position: 'relative', display: 'inline-block', marginBottom: '16px' }}>
+                  <img
+                    src={userProfile.avatarUrl}
+                    alt="Profile"
+                    style={{ width: '96px', height: '96px', borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--accent-purple)' }}
+                  />
+                  <div style={{
+                    position: 'absolute', bottom: '0', right: '0',
+                    width: '28px', height: '28px', borderRadius: '50%',
+                    background: 'var(--accent-emerald)', display: 'flex',
+                    alignItems: 'center', justifyContent: 'center', border: '2px solid var(--bg-primary)'
+                  }}>✓</div>
+                </div>
+
+                <h2 style={{ fontSize: '20px', fontWeight: '700' }}>{userProfile.name}</h2>
+                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>{userProfile.department}</p>
+                <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>{userProfile.level} &nbsp;·&nbsp; {userProfile.regNo}</p>
+
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', margin: '14px 0' }}>
+                  <span style={{
+                    background: 'rgba(139,92,246,0.15)', color: 'var(--accent-purple)',
+                    padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '600'
+                  }}>🛡️ {userProfile.trustLevel}</span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-around', paddingTop: '16px', borderTop: '1px solid var(--border-glass)', fontSize: '13px' }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '20px', fontWeight: '700', color: 'var(--accent-emerald)' }}>{userProfile.trustScore}%</div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '11px' }}>Trust Score</div>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '20px', fontWeight: '700' }}>{userProfile.tradesCount}</div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '11px' }}>Trades</div>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '20px', fontWeight: '700', color: 'var(--accent-amber)' }}>★ {userProfile.rating}</div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '11px' }}>{userProfile.totalReviews} Reviews</div>
+                  </div>
+                </div>
+
+                <button
+                  className="btn btn-secondary"
+                  style={{ width: '100%', marginTop: '20px', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                  onClick={() => { setProfileDraft({ ...userProfile }); setEditingProfile(true); }}
+                >
+                  <Icons.Edit /> Edit Profile
+                </button>
+              </div>
+
+              {/* Verification badges */}
+              <div className="glass-panel" style={{ padding: '20px' }}>
+                <h4 style={{ fontSize: '13px', fontWeight: '600', marginBottom: '14px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Verification Status</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px' }}>
+                  {[
+                    { label: 'Phone Number', done: userProfile.phoneVerified },
+                    { label: 'University Email', done: userProfile.emailVerified },
+                    { label: 'Student ID (UNN Portal)', done: userProfile.studentIdVerified },
+                    { label: 'Selfie Biometrics', done: userProfile.selfieVerified },
+                    { label: 'NIN (NIMC)', done: userProfile.ninVerified },
+                    { label: 'BVN (Bank Record)', done: userProfile.bvnVerified },
+                  ].map(({ label, done }) => (
+                    <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ color: done ? 'var(--text-primary)' : 'var(--text-muted)' }}>{label}</span>
+                      <span style={{
+                        fontSize: '11px', padding: '2px 10px', borderRadius: '20px', fontWeight: '600',
+                        background: done ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.05)',
+                        color: done ? 'var(--accent-emerald)' : 'var(--text-muted)'
+                      }}>{done ? '✓ Verified' : 'Pending'}</span>
+                    </div>
+                  ))}
+                </div>
+                <button className="btn" style={{ width: '100%', marginTop: '16px', fontSize: '12px' }} onClick={() => setCurrentTab('trust')}>
+                  Complete Verification
+                </button>
+              </div>
+
+              {/* Joined info */}
+              <div className="glass-panel" style={{ padding: '16px 20px', fontSize: '12px', color: 'var(--text-muted)' }}>
+                📅 Member since {userProfile.joinedDate} &nbsp;·&nbsp; 📍 {userProfile.hostel}
+              </div>
+            </div>
+
+            {/* Right — Description + Skills + Activity */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+              {/* Bio / Description */}
+              <div className="glass-panel" style={{ padding: '24px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: '600' }}>About Me</h3>
+                  <button
+                    className="action-btn"
+                    style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                    onClick={() => { setProfileDraft({ ...userProfile }); setEditingProfile(true); }}
+                  >
+                    <Icons.Edit /> Edit
+                  </button>
+                </div>
+                <p style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: '1.7' }}>
+                  {userProfile.bio || <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>No bio yet. Click Edit to add one.</span>}
+                </p>
+
+                {/* Skills */}
+                {userProfile.skills.length > 0 && (
+                  <div style={{ marginTop: '20px' }}>
+                    <h4 style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Skills & Expertise</h4>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                      {userProfile.skills.map((sk, i) => (
+                        <span key={i} style={{
+                          background: 'rgba(139,92,246,0.12)', color: 'var(--accent-purple)',
+                          padding: '5px 14px', borderRadius: '20px', fontSize: '12px', fontWeight: '500',
+                          border: '1px solid rgba(139,92,246,0.25)'
+                        }}>{sk}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Social links */}
+                {(userProfile.twitter || userProfile.linkedin || userProfile.github) && (
+                  <div style={{ marginTop: '20px', display: 'flex', gap: '12px' }}>
+                    {userProfile.twitter && (
+                      <a href={`https://twitter.com/${userProfile.twitter}`} target="_blank" rel="noreferrer"
+                        style={{ fontSize: '12px', color: 'var(--accent-blue)', textDecoration: 'none' }}>
+                        🐦 @{userProfile.twitter}
+                      </a>
+                    )}
+                    {userProfile.linkedin && (
+                      <a href={`https://linkedin.com/in/${userProfile.linkedin}`} target="_blank" rel="noreferrer"
+                        style={{ fontSize: '12px', color: 'var(--accent-blue)', textDecoration: 'none' }}>
+                        💼 LinkedIn
+                      </a>
+                    )}
+                    {userProfile.github && (
+                      <a href={`https://github.com/${userProfile.github}`} target="_blank" rel="noreferrer"
+                        style={{ fontSize: '12px', color: 'var(--accent-blue)', textDecoration: 'none' }}>
+                        💻 GitHub
+                      </a>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Contact info card */}
+              <div className="glass-panel" style={{ padding: '24px' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px' }}>Contact & Identity</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', fontSize: '13px' }}>
+                  <div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase', marginBottom: '4px' }}>University Email</div>
+                    <div style={{ fontWeight: '500' }}>{userProfile.email}</div>
+                  </div>
+                  <div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase', marginBottom: '4px' }}>Registration No.</div>
+                    <div style={{ fontWeight: '500' }}>{userProfile.regNo}</div>
+                  </div>
+                  <div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase', marginBottom: '4px' }}>Department</div>
+                    <div style={{ fontWeight: '500' }}>{userProfile.department}</div>
+                  </div>
+                  <div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase', marginBottom: '4px' }}>Hostel</div>
+                    <div style={{ fontWeight: '500' }}>{userProfile.hostel}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Recent activity */}
+              <div className="glass-panel" style={{ padding: '24px' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px' }}>Recent Activity</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {[
+                    { icon: '🛒', text: 'Completed escrow purchase — Dell Latitude 7490', time: '2 days ago', color: 'var(--accent-emerald)' },
+                    { icon: '⭐', text: 'Received a 5-star review from Adaeze Okonkwo', time: '4 days ago', color: 'var(--accent-amber)' },
+                    { icon: '🛡️', text: 'Phone number verified successfully', time: '1 week ago', color: 'var(--accent-purple)' },
+                    { icon: '📝', text: 'Listed iPhone 12 Pro Max on the Marketplace', time: '2 weeks ago', color: 'var(--accent-blue)' },
+                  ].map((item, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', paddingBottom: '12px', borderBottom: i < 3 ? '1px solid var(--border-glass)' : 'none' }}>
+                      <div style={{ fontSize: '18px', lineHeight: 1 }}>{item.icon}</div>
+                      <div style={{ flexGrow: 1 }}>
+                        <div style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{item.text}</div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '3px' }}>{item.time}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Profile Modal */}
+        {editingProfile && profileDraft && (
+          <div className="modal-overlay">
+            <div className="glass-panel modal-content" style={{ position: 'relative', maxWidth: '560px', width: '100%' }}>
+              <button className="modal-close" onClick={() => setEditingProfile(false)}>✕</button>
+              <h2 style={{ fontSize: '18px', fontWeight: '700', marginBottom: '20px' }}>Edit Your Profile</h2>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>Full Name</label>
+                    <input className="form-input" value={profileDraft.name} onChange={e => setProfileDraft(p => ({ ...p, name: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>Level</label>
+                    <select className="form-input" value={profileDraft.level} onChange={e => setProfileDraft(p => ({ ...p, level: e.target.value }))}>
+                      {['100 Level','200 Level','300 Level','400 Level','500 Level','Postgraduate'].map(l => <option key={l}>{l}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>Department / Faculty</label>
+                  <input className="form-input" value={profileDraft.department} onChange={e => setProfileDraft(p => ({ ...p, department: e.target.value }))} />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>Bio / Description</label>
+                  <textarea
+                    className="form-input"
+                    style={{ minHeight: '100px', resize: 'vertical' }}
+                    maxLength={300}
+                    value={profileDraft.bio}
+                    onChange={e => setProfileDraft(p => ({ ...p, bio: e.target.value }))}
+                    placeholder="Tell the campus who you are, what you sell or offer..."
+                  />
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', textAlign: 'right', marginTop: '4px' }}>{profileDraft.bio.length}/300</div>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>Skills (comma separated)</label>
+                  <input
+                    className="form-input"
+                    value={profileDraft.skills.join(', ')}
+                    onChange={e => setProfileDraft(p => ({ ...p, skills: e.target.value.split(',').map(s => s.trim()).filter(Boolean) }))}
+                    placeholder="e.g. React.js, Graphic Design, Photography"
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>Hostel / Location</label>
+                  <input className="form-input" value={profileDraft.hostel} onChange={e => setProfileDraft(p => ({ ...p, hostel: e.target.value }))} />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>Twitter Handle</label>
+                    <input className="form-input" placeholder="username" value={profileDraft.twitter} onChange={e => setProfileDraft(p => ({ ...p, twitter: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>LinkedIn ID</label>
+                    <input className="form-input" placeholder="username" value={profileDraft.linkedin} onChange={e => setProfileDraft(p => ({ ...p, linkedin: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>GitHub</label>
+                    <input className="form-input" placeholder="username" value={profileDraft.github} onChange={e => setProfileDraft(p => ({ ...p, github: e.target.value }))} />
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '12px', paddingTop: '8px' }}>
+                  <button
+                    className="btn"
+                    style={{ flexGrow: 2 }}
+                    onClick={() => {
+                      setUserProfile(profileDraft);
+                      setEditingProfile(false);
+                      showToast('Profile updated successfully!');
+                    }}
+                  >
+                    Save Changes
+                  </button>
+                  <button className="btn btn-secondary" onClick={() => setEditingProfile(false)}>Cancel</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
       </main>
     </div>
   );
