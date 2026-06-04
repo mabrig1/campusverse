@@ -33,7 +33,7 @@ Log in to [MongoDB Atlas](https://cloud.mongodb.com), then:
 3. Your connection string (ready to use — password already filled in):
 
 ```
-mongodb+srv://campusverse_user:CampusVerse2026@cluster0.xxxxx.mongodb.net/campusverse_db?retryWrites=true&w=majority
+mongodb+srv://campusverse_user:CampusVerse2026@learnhub.07ozegd.mongodb.net/campusverse_db?retryWrites=true&w=majority&appName=learnhub
 ```
 
 > Replace `cluster0.xxxxx` with your actual Atlas cluster hostname shown in the Connect dialog.
@@ -49,7 +49,7 @@ Settings → Environment → add each variable:
 ```
 NODE_ENV         = production
 PORT             = 5000
-MONGODB_URI      = mongodb+srv://campusverse_user:CampusVerse2026@cluster0.xxxxx.mongodb.net/campusverse_db?retryWrites=true&w=majority
+MONGODB_URI      = mongodb+srv://campusverse_user:CampusVerse2026@learnhub.07ozegd.mongodb.net/campusverse_db?retryWrites=true&w=majority&appName=learnhub
 MONGODB_DB_NAME  = campusverse_db
 JWT_SECRET       = <generate with: openssl rand -hex 64>
 JWT_EXPIRES_IN   = 7d
