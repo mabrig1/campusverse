@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { api, setAuthToken } from './api';
 import AuthScreen from './AuthScreen';
 import WalletTab from './WalletTab';
-import SellModal from './SellModal';
+import MarketplaceBrowse from './marketplace/MarketplaceBrowse';
 
 // SVG Icons
 const Icons = {
@@ -73,19 +73,14 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState('dashboard');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
-  const [showSellModal, setShowSellModal] = useState(false);
 
   // DB States
-  const [products, setProducts] = useState([]);
   const [services, setServices] = useState([]);
   const [directory, setDirectory] = useState([]);
   const [activeEscrow, setActiveEscrow] = useState(null);
 
   // Custom interactive variables
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedProduct, setSelectedProduct] = useState(null);
-  const [imeiInput, setImeiInput] = useState('');
-  const [imeiReport, setImeiReport] = useState(null);
   const [bvnInput, setBvnInput] = useState('');
   const [ninInput, setNinInput] = useState('');
   const [studentIdInput, setStudentIdInput] = useState('');
@@ -140,12 +135,7 @@ export default function App() {
   const fetchBackendData = async () => {
     setLoading(true);
     try {
-      const [prodRes, srvRes, dirRes] = await Promise.all([
-        api.getProducts(),
-        api.getServices(),
-        api.getDirectory(),
-      ]);
-      setProducts(prodRes);
+      const [srvRes, dirRes] = await Promise.all([api.getServices(), api.getDirectory()]);
       setServices(srvRes);
       setDirectory(dirRes);
     } catch (err) {
@@ -250,24 +240,6 @@ export default function App() {
       const res = await api.verifyBvn(bvnInput);
       setUser(res.user);
       showToast(`BVN matching successful: Verified with ${res.data.bankVerified}`);
-    } catch (err) {
-      showToast(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // IMEI Checker
-  const checkIMEI = async () => {
-    if (!imeiInput) {
-      showToast('Please enter a 15-digit IMEI number');
-      return;
-    }
-    setLoading(true);
-    try {
-      const data = await api.verifyImei(imeiInput);
-      setImeiReport(data);
-      showToast(data.clean ? 'IMEI Clean! Device safe for buy/sell.' : 'WARNING: This device is flagged as stolen/blacklisted!');
     } catch (err) {
       showToast(err.message);
     } finally {
@@ -566,185 +538,9 @@ export default function App() {
           </div>
         )}
 
-        {/* Product Marketplace Tab */}
+        {/* Marketplace Tab */}
         {currentTab === 'marketplace' && (
-          <div>
-            {/* Sell CTA + IMEI check banner */}
-            <div className="glass-panel" style={{ padding: '20px', marginBottom: '28px', display: 'flex', justifyContent: 'space-between', gap: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
-              <div>
-                <h3 style={{ fontSize: '16px', fontWeight: '600' }}>List something for sale</h3>
-                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px', maxWidth: '420px' }}>
-                  Reach verified students across UNN. Escrow-protected sales build your trust score.
-                </p>
-              </div>
-              <button className="btn btn-accent" onClick={() => setShowSellModal(true)}>
-                <Icons.Plus /> Sell an Item
-              </button>
-            </div>
-
-            <div className="glass-panel" style={{ padding: '20px', marginBottom: '28px', display: 'flex', justifyContent: 'space-between', gap: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
-              <div>
-                <h3 style={{ fontSize: '16px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  🕵️ UNN Smart Anti-Theft Device Checker
-                </h3>
-                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px', maxWidth: '500px' }}>
-                  Buying a used phone or laptop? Validate the IMEI or Serial Number against our campus security database before completing the deal.
-                </p>
-              </div>
-              <div style={{ display: 'flex', gap: '8px', flexGrow: 1, maxWidth: '400px' }}>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="Enter 15-digit IMEI or Serial No..."
-                  style={{ flexGrow: 1 }}
-                  value={imeiInput}
-                  onChange={(e) => setImeiInput(e.target.value)}
-                />
-                <button className="btn btn-accent" onClick={checkIMEI}>Verify</button>
-              </div>
-            </div>
-
-            {/* IMEI results panel */}
-            {imeiReport && (
-              <div className="glass-panel" style={{
-                padding: '16px 20px',
-                marginBottom: '24px',
-                borderLeft: `4px solid ${imeiReport.clean ? 'var(--accent-emerald)' : 'red'}`,
-                background: imeiReport.clean ? 'rgba(16, 185, 129, 0.05)' : 'rgba(255, 0, 0, 0.05)'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <h4 style={{ fontWeight: '600' }}>Device Telemetry Status: {imeiReport.status}</h4>
-                  <button className="action-btn" onClick={() => setImeiReport(null)}>✕ Close</button>
-                </div>
-                <div style={{ display: 'flex', gap: '24px', marginTop: '12px', fontSize: '13px' }}>
-                  <div><strong>IMEI / Serial:</strong> {imeiReport.imei}</div>
-                  <div><strong>Network Lock:</strong> {imeiReport.carrierLock}</div>
-                  <div><strong>Source Database:</strong> {imeiReport.source}</div>
-                </div>
-              </div>
-            )}
-
-            {/* Products grid */}
-            <div className="items-grid">
-              {products.filter(p => p.title.toLowerCase().includes(searchQuery.toLowerCase()) || p.category.toLowerCase().includes(searchQuery.toLowerCase())).map(prod => (
-                <div key={prod.id} className="glass-panel item-card">
-                  <div className="item-image-wrapper">
-                    <img className="item-image" src={prod.images[0]} alt={prod.title} />
-                    <span className={`item-badge ${prod.inspectionRequired ? 'badge-verified' : 'badge-unverified'}`}>
-                      {prod.inspectionRequired ? '🛡️ Inspected & Verified' : 'Unverified Listing'}
-                    </span>
-                  </div>
-
-                  <div className="item-content">
-                    <span className="item-category">{prod.category}</span>
-                    <h3 className="item-title">{prod.title}</h3>
-                    <div className="item-price">₦{prod.price.toLocaleString()}</div>
-
-                    <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-                      <span className="post-tag" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)' }}>
-                        {prod.condition}
-                      </span>
-                      <span className="post-tag" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)' }}>
-                        📍 {prod.location}
-                      </span>
-                    </div>
-
-                    <div className="item-footer">
-                      <div className="seller-brief">
-                        <img className="seller-avatar" src={prod.seller.avatarUrl} alt="avatar" />
-                        <div>
-                          <div>{prod.seller.name}</div>
-                          <div style={{ color: 'var(--accent-emerald)', fontSize: '10px' }}>🛡️ {prod.seller.trustScore}% Score</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
-                      {prod.inspectionRequired && (
-                        <button className="btn btn-secondary" style={{ flexGrow: 1, padding: '8px' }} onClick={() => setSelectedProduct(prod)}>
-                          Specs
-                        </button>
-                      )}
-                      {prod.seller.id === user.id ? (
-                        <span className="post-tag" style={{ flexGrow: 2, textAlign: 'center', padding: '8px' }}>Your listing</span>
-                      ) : (
-                        <button className="btn btn-accent" style={{ flexGrow: 2, padding: '8px' }} onClick={() => startEscrowBuy(prod)}>
-                          Buy Escrow
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {showSellModal && (
-              <SellModal
-                showToast={showToast}
-                onClose={() => setShowSellModal(false)}
-                onCreated={(product) => {
-                  setProducts((prev) => [product, ...prev]);
-                  setShowSellModal(false);
-                }}
-              />
-            )}
-
-            {/* Product details and Inspection certificate modal */}
-            {selectedProduct && (
-              <div className="modal-overlay">
-                <div className="glass-panel modal-content" style={{ position: 'relative' }}>
-                  <button className="modal-close" onClick={() => setSelectedProduct(null)}>✕</button>
-                  <h2 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '16px' }}>🛡️ CampusVerse Inspection Certificate</h2>
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(16,185,129,0.1)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(16,185,129,0.3)', marginBottom: '20px' }}>
-                    <div>
-                      <span style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--accent-emerald)' }}>Condition Grade</span>
-                      <div style={{ fontSize: '24px', fontWeight: 'bold', color: 'var(--accent-emerald)' }}>
-                        {selectedProduct.inspectionReport?.inspectionScore ?? '—'} / 100
-                      </div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <span style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--accent-emerald)' }}>Inspected By</span>
-                      <div style={{ fontSize: '14px', fontWeight: '600' }}>{selectedProduct.inspectionReport?.inspectedBy}</div>
-                    </div>
-                  </div>
-
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
-                    <tbody>
-                      <tr style={{ borderBottom: '1px solid var(--border-glass)' }}>
-                        <td style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Device Serial Number:</td>
-                        <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: '500' }}>{selectedProduct.inspectionReport?.serialNumber}</td>
-                      </tr>
-                      <tr style={{ borderBottom: '1px solid var(--border-glass)' }}>
-                        <td style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>IMEI Number:</td>
-                        <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: '500' }}>{selectedProduct.inspectionReport?.imei}</td>
-                      </tr>
-                      <tr style={{ borderBottom: '1px solid var(--border-glass)' }}>
-                        <td style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Battery State of Health:</td>
-                        <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: '500', color: 'var(--accent-emerald)' }}>{selectedProduct.inspectionReport?.batteryHealth}</td>
-                      </tr>
-                      <tr style={{ borderBottom: '1px solid var(--border-glass)' }}>
-                        <td style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Display Conditions:</td>
-                        <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: '500' }}>{selectedProduct.inspectionReport?.screenCondition}</td>
-                      </tr>
-                      <tr style={{ borderBottom: '1px solid var(--border-glass)' }}>
-                        <td style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Repair/Diagnostic History:</td>
-                        <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: '500' }}>{selectedProduct.inspectionReport?.repairsDetected}</td>
-                      </tr>
-                      <tr style={{ borderBottom: '1px solid var(--border-glass)' }}>
-                        <td style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Authenticity Verification:</td>
-                        <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: '500', color: 'var(--accent-emerald)' }}>{selectedProduct.inspectionReport?.authenticity}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-
-                  <p style={{ marginTop: '20px', fontSize: '12px', color: 'var(--text-muted)', lineHeight: '1.4' }}>
-                    Disclaimer: This document certifies that the device has passed visual and automated hardware analysis at a designated CampusVerse Hub location in UNN. The serial numbers and IMEI databases have been confirmed clean.
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
+          <MarketplaceBrowse user={user} showToast={showToast} onBuyEscrow={startEscrowBuy} />
         )}
 
         {/* Services & Professional Network Tab */}

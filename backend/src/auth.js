@@ -24,3 +24,17 @@ export function requireAuth(req, res, next) {
     return res.status(401).json({ error: "Invalid or expired token" });
   }
 }
+
+/** Sets req.userId if a valid bearer token is present; never rejects. For routes that are public but personalize their response when logged in (e.g. a "favorited" flag on listings). */
+export function optionalAuth(req, _res, next) {
+  const header = req.headers.authorization;
+  const token = header?.startsWith("Bearer ") ? header.slice(7) : null;
+  if (token) {
+    try {
+      req.userId = jwt.verify(token, JWT_SECRET).sub;
+    } catch {
+      // Ignore invalid/expired tokens on optional-auth routes — treat as logged out.
+    }
+  }
+  next();
+}

@@ -14,9 +14,22 @@ The project is structured as an NPM monorepo with workspaces:
     *   Dynamic trust score engine, computed from real, persisted verification flags.
     *   KYC validations (NIN, BVN, Selfie biometric match) — still simulated (no live NIMC/bank/biometric integration), but now persisted per user instead of living only in frontend state.
     *   Anti-fraud telemetry, request risk ratings, and the IMEI stolen-device blacklist.
+    *   A configurable **campus marketplace module**: real category/campus-location config (not hardcoded to any one institution), search/filtering, infinite scroll, favorites, listing reports, and simulated paid promotion (Pin/Highlight/Feature).
     *   Services and the local business directory are still static demo data (not yet ported).
 
-This is a merge-in-progress from [CampusHub](https://github.com/mabrig1/CampusHub), a sibling campus-marketplace app — CampusHub's real-database/real-auth/atomic-wallet engineering is being layered onto CampusVerse's own peer-to-peer + escrow + trust-score design, incrementally. **Phase 1 (this pass): auth, wallet, and the marketplace/escrow engine are now real.** Food delivery, printing, accommodation, jobs, transportation, and events are CampusHub modules not yet ported — planned for follow-up passes.
+This is a merge-in-progress from [CampusHub](https://github.com/mabrig1/CampusHub), a sibling campus-marketplace app — CampusHub's real-database/real-auth/atomic-wallet engineering is being layered onto CampusVerse's own peer-to-peer + escrow + trust-score design, incrementally. **Phase 1: auth, wallet, and the marketplace/escrow engine are real. Phase 2 (this pass): a richer, configurable marketplace browsing/search/promotion module.** Food delivery, printing, accommodation, jobs, transportation, events, Student Services listings, the Campus Ad Board, and admin moderation are not yet built — planned for follow-up passes.
+
+### Campus Marketplace module (Phase 2)
+
+Everything under `frontend/src/marketplace/` and the marketplace-related routes in `backend/server.js`:
+
+*   **Configurable, institution-agnostic**: campus locations and product categories live in `backend/src/campus-config.js` (single source of truth, served over `/api/campus-locations` and `/api/marketplace-categories`) — no campus name, hostel name, or institution is hardcoded into the module's logic. Swap that file's arrays to reconfigure for any university.
+*   **Search & filters**: keyword, category, campus location, condition (New/Used), price range, verified-sellers-only, featured-only, my-favorites, sort by newest/most popular — all real-time against the backend, with infinite scroll (`IntersectionObserver`) and skeleton loaders while data loads.
+*   **Listings**: multi-image galleries, a strict New/Used badge plus a free-text condition note, WhatsApp click-to-chat (auto-filled message) and Call Seller as a direct-contact path alongside the existing escrow purchase flow, save/favorite, share, and report-listing.
+*   **Promotion (Pin/Highlight/Feature)**: a listing owner can promote their own listing; cost is `days × price-per-day` (`backend/src/campus-config.js`'s `PROMOTION_PRICING`) and is charged from their real wallet — **no live Paystack/Flutterwave/Monnify integration**, this simulates the payment and records it (`Promotion` model) in the shape a real gateway integration would need later. Promoted listings rank above regular ones across the whole result set, not just within one page.
+*   Built with React Hook Form + Zod (the listing form), Framer Motion (card/menu transitions), and `lucide-react` icons, per the module's own request — the rest of the app's hand-rolled inline-SVG icons and plain-`useState` forms were left as-is rather than rewritten wholesale.
+*   Scoped to a `.cv-market` CSS class (`frontend/src/marketplace/theme.css`) so its Deep Emerald Green / Warm Gold palette doesn't change the rest of the app's existing purple/blue theme.
+*   **Not built in this pass** (see the Rollout scope note above): the Student Services side of this request (service categories, booking modal, provider ratings), the Campus Ad Board carousel, and admin moderation pages (approve/reject listings, verify students, manage reports) — the `Report` model already exists and is being written to, so an admin queue is a straightforward follow-up against existing data.
 
 ---
 
@@ -71,17 +84,23 @@ Once running, navigate to the local frontend address (typically `http://localhos
 5. Click **Accept & Release Funds to Seller** to actually credit the seller's wallet, or **Raise Dispute** to lock the funds in arbitration.
 6. Check the **Wallet** tab again (as buyer and as seller, via a second login) to see the real transaction history.
 
-### 2. List an item for sale
-1. Go to the **Marketplace** tab and click **Sell an Item**.
-2. Fill in the listing form — it's created for real and immediately visible to other students.
+### 2. List an item for sale, with promotion
+1. Go to the **Marketplace** tab and click the floating **+** button, then **Sell a Product**.
+2. Fill in the listing form (category and campus location come from configuration, not a hardcoded list) and optionally choose a promotion tier — the cost is calculated live and charged from your real wallet on publish.
+3. Your new listing appears immediately, and — if promoted — ranks above non-promoted listings.
 
-### 3. Live Device Integrity Check
+### 3. Search, filter, and favorite
+1. Use the search bar or filter chips (Featured, Under ₦5,000, Verified Sellers, Newest, Most Popular, category chips, or **Filters** for location/condition/price range).
+2. Click the heart icon on any listing to save it, then click **My Favorites** to see only your saved listings.
+3. Open a listing to see its full gallery, seller profile, related listings, and to Share, Report, or contact the seller via WhatsApp/Call.
+
+### 4. Live Device Integrity Check
 1. Go to the **Marketplace** tab.
 2. In the anti-theft scanner search bar:
     *   Type `357289110482937` and click **Verify**. (Flagged stolen device)
     *   Type any other number (e.g., `850123985102948`) and click **Verify**. (Clean device)
 
-### 4. Biometric & Identity Trust Scoring
+### 5. Biometric & Identity Trust Scoring
 1. Go to the **Trust & KYC** tab.
 2. Enter a mock 11-digit number in the **NIN** or **BVN** forms and submit.
 3. Click **Verify Selfie** to trigger the face matching comparison algorithm.

@@ -4,9 +4,15 @@ import cors from "cors";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "./src/db.js";
-import { signToken, requireAuth } from "./src/auth.js";
+import { signToken, requireAuth, optionalAuth } from "./src/auth.js";
 import { chargeWallet, creditWallet, InsufficientFundsError } from "./src/wallet.js";
 import { computeTrustScore } from "./src/trust-score.js";
+import {
+  CAMPUS_LOCATIONS,
+  MARKETPLACE_CATEGORIES,
+  PROMOTION_PRICING,
+  REPORT_REASONS,
+} from "./src/campus-config.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -22,26 +28,58 @@ function handleError(res, err) {
   return res.status(500).json({ error: "Internal server error" });
 }
 
-function serializeProduct(product, extraTrust = {}) {
+function listingAge(createdAt) {
+  const ms = Date.now() - new Date(createdAt).getTime();
+  const days = Math.floor(ms / (1000 * 60 * 60 * 24));
+  if (days <= 0) {
+    const hours = Math.max(1, Math.floor(ms / (1000 * 60 * 60)));
+    return `${hours}h ago`;
+  }
+  if (days === 1) return "1 day ago";
+  return `${days} days ago`;
+}
+
+function whatsappLink(phone, message) {
+  if (!phone) return null;
+  const digits = phone.replace(/[^\d+]/g, "");
+  return `https://wa.me/${digits.replace(/^\+/, "")}?text=${encodeURIComponent(message)}`;
+}
+
+function serializeProduct(product, { favorited = false } = {}) {
   const seller = product.seller;
-  const trust = extraTrust[seller.id] ?? computeTrustScore(seller);
+  const trust = computeTrustScore(seller);
+  const isPromoted =
+    product.promotionTier !== "NONE" &&
+    (!product.promotionExpiresAt || new Date(product.promotionExpiresAt) > new Date());
+
   return {
     id: product.id,
     title: product.title,
     description: product.description,
     price: product.price,
     category: product.category,
+    conditionType: product.conditionType,
     condition: product.condition,
     location: product.location,
-    images: [product.imageUrl],
+    images: JSON.parse(product.imagesJson || "[]"),
     stock: product.stock,
     inspectionRequired: product.inspectionRequired,
     inspectionReport: product.inspectionReportJson ? JSON.parse(product.inspectionReportJson) : null,
+    viewCount: product.viewCount,
+    promotionTier: isPromoted ? product.promotionTier : "NONE",
+    promotionExpiresAt: isPromoted ? product.promotionExpiresAt : null,
+    listingAge: listingAge(product.createdAt),
+    favorited,
+    whatsappLink: whatsappLink(
+      seller.phone,
+      `Hi, I found your listing "${product.title}" on CampusVerse and I'm interested in this item.`
+    ),
     seller: {
       id: seller.id,
       name: seller.name,
       verified: seller.studentIdVerified,
       trustScore: trust.trustScore,
+      phone: seller.phone,
       avatarUrl:
         seller.avatarUrl ||
         "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200",
@@ -321,22 +359,125 @@ app.post("/api/wallet/transfer", requireAuth, async (req, res) => {
 
 // ---------- Marketplace ----------
 
-app.get("/api/products", async (req, res) => {
-  const products = await prisma.product.findMany({
-    include: { seller: true },
-    orderBy: { createdAt: "desc" },
+app.get("/api/campus-locations", (req, res) => res.json(CAMPUS_LOCATIONS));
+app.get("/api/marketplace-categories", (req, res) => res.json(MARKETPLACE_CATEGORIES));
+app.get("/api/promotion-pricing", (req, res) => res.json(PROMOTION_PRICING));
+app.get("/api/report-reasons", (req, res) => res.json(REPORT_REASONS));
+
+const PROMOTION_RANK = { FEATURED: 3, PINNED: 2, HIGHLIGHTED: 1, NONE: 0 };
+
+async function expireStalePromotions() {
+  await prisma.product.updateMany({
+    where: { promotionTier: { not: "NONE" }, promotionExpiresAt: { lt: new Date() } },
+    data: { promotionTier: "NONE", promotionExpiresAt: null },
   });
-  res.json(products.map((p) => serializeProduct(p)));
+}
+
+app.get("/api/products", optionalAuth, async (req, res) => {
+  await expireStalePromotions();
+
+  const {
+    q,
+    category,
+    location,
+    condition,
+    minPrice,
+    maxPrice,
+    verifiedOnly,
+    featuredOnly,
+    favoritesOnly,
+    sort = "newest",
+  } = req.query;
+  const page = Math.max(Number(req.query.page) || 1, 1);
+  const take = Math.min(Number(req.query.limit) || 12, 50);
+  const skip = (page - 1) * take;
+
+  if (favoritesOnly === "true" && !req.userId) {
+    return res.status(401).json({ error: "Log in to view your favorites" });
+  }
+
+  const where = {
+    ...(category ? { category } : {}),
+    ...(location ? { location } : {}),
+    ...(condition ? { conditionType: String(condition).toUpperCase() } : {}),
+    ...(verifiedOnly === "true" ? { seller: { studentIdVerified: true } } : {}),
+    ...(featuredOnly === "true" ? { promotionTier: { not: "NONE" } } : {}),
+    ...(favoritesOnly === "true" ? { favoritedBy: { some: { userId: req.userId } } } : {}),
+    ...(q ? { OR: [{ title: { contains: q } }, { description: { contains: q } }] } : {}),
+    ...(minPrice || maxPrice
+      ? { price: { ...(minPrice ? { gte: Number(minPrice) } : {}), ...(maxPrice ? { lte: Number(maxPrice) } : {}) } }
+      : {}),
+  };
+
+  const orderBy = sort === "popular" ? [{ viewCount: "desc" }] : [{ createdAt: "desc" }];
+
+  // Promoted listings must rank above regular ones globally, not just within
+  // whatever page they'd otherwise land on. Prisma/SQLite can't express
+  // "promoted first, then by sort" as a single indexed ORDER BY, so this
+  // fetches the full filtered set (capped — see MAX_SORTED_SCAN) and sorts/
+  // paginates in the app. Fine at campus-marketplace scale; would need a
+  // real ranking column (or Postgres + a computed sort key) well before this
+  // cap is a real limit.
+  const MAX_SORTED_SCAN = 500;
+  const [total, allMatching] = await Promise.all([
+    prisma.product.count({ where }),
+    prisma.product.findMany({ where, include: { seller: true }, orderBy, take: MAX_SORTED_SCAN }),
+  ]);
+
+  allMatching.sort((a, b) => PROMOTION_RANK[b.promotionTier] - PROMOTION_RANK[a.promotionTier]);
+  const products = allMatching.slice(skip, skip + take);
+
+  let favoritedIds = new Set();
+  if (req.userId && products.length > 0) {
+    const favs = await prisma.favorite.findMany({
+      where: { userId: req.userId, productId: { in: products.map((p) => p.id) } },
+    });
+    favoritedIds = new Set(favs.map((f) => f.productId));
+  }
+
+  res.json({
+    items: products.map((p) => serializeProduct(p, { favorited: favoritedIds.has(p.id) })),
+    page,
+    hasMore: skip + products.length < total,
+    total,
+  });
+});
+
+app.get("/api/products/:id", optionalAuth, async (req, res) => {
+  const product = await prisma.product.update({
+    where: { id: req.params.id },
+    data: { viewCount: { increment: 1 } },
+    include: { seller: true },
+  }).catch(() => null);
+  if (!product) return res.status(404).json({ error: "Listing not found" });
+
+  const [favorited, related] = await Promise.all([
+    req.userId
+      ? prisma.favorite.findUnique({ where: { userId_productId: { userId: req.userId, productId: product.id } } })
+      : null,
+    prisma.product.findMany({
+      where: { category: product.category, id: { not: product.id } },
+      include: { seller: true },
+      orderBy: { createdAt: "desc" },
+      take: 4,
+    }),
+  ]);
+
+  res.json({
+    ...serializeProduct(product, { favorited: Boolean(favorited) }),
+    related: related.map((p) => serializeProduct(p)),
+  });
 });
 
 const productSchema = z.object({
   title: z.string().min(3),
   description: z.string().min(10),
   price: z.coerce.number().positive(),
-  category: z.string().min(2),
+  category: z.enum(MARKETPLACE_CATEGORIES),
+  conditionType: z.enum(["NEW", "USED"]),
   condition: z.string().min(2),
-  location: z.string().min(2),
-  imageUrl: z.string().url(),
+  location: z.enum(CAMPUS_LOCATIONS),
+  images: z.array(z.string().url()).min(1).max(6),
   inspectionRequired: z.boolean().optional(),
 });
 
@@ -345,11 +486,96 @@ app.post("/api/products", requireAuth, async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid product" });
   }
+  const { images, ...rest } = parsed.data;
   const product = await prisma.product.create({
-    data: { ...parsed.data, sellerId: req.userId },
+    data: { ...rest, imagesJson: JSON.stringify(images), sellerId: req.userId },
     include: { seller: true },
   });
   res.status(201).json(serializeProduct(product));
+});
+
+// ---------- Favorites ----------
+
+app.get("/api/favorites", requireAuth, async (req, res) => {
+  const favorites = await prisma.favorite.findMany({
+    where: { userId: req.userId },
+    include: { product: { include: { seller: true } } },
+    orderBy: { createdAt: "desc" },
+  });
+  res.json(favorites.map((f) => serializeProduct(f.product, { favorited: true })));
+});
+
+app.post("/api/favorites/:productId", requireAuth, async (req, res) => {
+  await prisma.favorite
+    .create({ data: { userId: req.userId, productId: req.params.productId } })
+    .catch(() => null); // already favorited — idempotent
+  res.status(201).json({ favorited: true });
+});
+
+app.delete("/api/favorites/:productId", requireAuth, async (req, res) => {
+  await prisma.favorite
+    .delete({ where: { userId_productId: { userId: req.userId, productId: req.params.productId } } })
+    .catch(() => null);
+  res.json({ favorited: false });
+});
+
+// ---------- Reports (feeds a future admin moderation queue) ----------
+
+app.post("/api/products/:id/report", requireAuth, async (req, res) => {
+  const reason = String(req.body?.reason || "").trim();
+  if (!reason) return res.status(400).json({ error: "Choose a reason for this report" });
+
+  const product = await prisma.product.findUnique({ where: { id: req.params.id } });
+  if (!product) return res.status(404).json({ error: "Listing not found" });
+
+  await prisma.report.create({
+    data: { reporterId: req.userId, productId: product.id, reason },
+  });
+  res.status(201).json({ success: true, message: "Thanks — our team will review this listing." });
+});
+
+// ---------- Promotions ----------
+// Payment is simulated (no live Paystack/Flutterwave/Monnify call) — this
+// records the promotion and applies it immediately, in the shape a real
+// checkout would need to slot into later.
+
+const promoteSchema = z.object({
+  tier: z.enum(["PINNED", "HIGHLIGHTED", "FEATURED"]),
+  days: z.coerce.number().int().min(1).max(30).default(1),
+});
+
+app.post("/api/products/:id/promote", requireAuth, async (req, res) => {
+  const parsed = promoteSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid promotion request" });
+  }
+  const { tier, days } = parsed.data;
+
+  const product = await prisma.product.findUnique({ where: { id: req.params.id } });
+  if (!product) return res.status(404).json({ error: "Listing not found" });
+  if (product.sellerId !== req.userId) {
+    return res.status(403).json({ error: "Only the listing owner can promote it" });
+  }
+
+  const cost = PROMOTION_PRICING[tier] * days;
+  const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+
+  try {
+    const updated = await prisma.$transaction(async (tx) => {
+      await chargeWallet(tx, req.userId, cost, "TRANSFER_OUT", `${tier} promotion (${days}d): ${product.title}`);
+      await tx.promotion.create({
+        data: { productId: product.id, buyerId: req.userId, tier, days, cost, expiresAt },
+      });
+      return tx.product.update({
+        where: { id: product.id },
+        data: { promotionTier: tier, promotionExpiresAt: expiresAt },
+        include: { seller: true },
+      });
+    });
+    res.json({ success: true, message: `Listing promoted (${tier.toLowerCase()}) for ${days} day(s)`, product: serializeProduct(updated) });
+  } catch (err) {
+    handleError(res, err);
+  }
 });
 
 // ---------- Escrow engine ----------

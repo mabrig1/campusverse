@@ -6,6 +6,9 @@ const prisma = new PrismaClient();
 
 async function main() {
   console.log("Wiping existing data...");
+  await prisma.promotion.deleteMany();
+  await prisma.favorite.deleteMany();
+  await prisma.report.deleteMany();
   await prisma.escrowTransaction.deleteMany();
   await prisma.review.deleteMany();
   await prisma.product.deleteMany();
@@ -78,16 +81,20 @@ async function main() {
     },
   });
 
-  await prisma.product.create({
+  const iphone = await prisma.product.create({
     data: {
       title: "iPhone 12 Pro Max (128GB, Pacific Blue)",
       description:
-        "Clean UK-used. Battery health 88%. True Tone active, Face ID functional. Selling because I need to buy textbooks and pay hostel fees.",
+        "Clean UK-used. Battery health 88%. True Tone active, Face ID functional. Selling because I need to buy textbooks.",
       price: 380000,
       category: "Electronics",
-      condition: "Used (Excellent)",
-      location: "Franco Hostel, UNN",
-      imageUrl: "https://images.unsplash.com/photo-1616348436168-de43ad0db179?auto=format&fit=crop&q=80&w=600",
+      conditionType: "USED",
+      condition: "Excellent",
+      location: "Student Village",
+      imagesJson: JSON.stringify([
+        "https://images.unsplash.com/photo-1616348436168-de43ad0db179?auto=format&fit=crop&q=80&w=600",
+        "https://images.unsplash.com/photo-1592286927505-1def25115481?auto=format&fit=crop&q=80&w=600",
+      ]),
       inspectionRequired: true,
       inspectionReportJson: JSON.stringify({
         imei: "357289110482937",
@@ -97,8 +104,9 @@ async function main() {
         repairsDetected: "None",
         authenticity: "Verified Original Apple",
         inspectionScore: 94,
-        inspectedBy: "CampusVerse Hub (Franco, UNN)",
+        inspectedBy: "CampusVerse Inspection Hub",
       }),
+      viewCount: 42,
       sellerId: chinedu.id,
     },
   });
@@ -109,11 +117,15 @@ async function main() {
       description:
         "Very sturdy wooden desk with a metal frame. Comes with a comfortable mesh office chair. Perfect for studying at night.",
       price: 65000,
-      category: "Hostel Furniture",
-      condition: "Used (Like New)",
-      location: "Odim Gate area, Nsukka",
-      imageUrl: "https://images.unsplash.com/photo-1518455027359-f3f8164ba6bd?auto=format&fit=crop&q=80&w=600",
+      category: "Miscellaneous",
+      conditionType: "USED",
+      condition: "Like new",
+      location: "Central Hostel",
+      imagesJson: JSON.stringify([
+        "https://images.unsplash.com/photo-1518455027359-f3f8164ba6bd?auto=format&fit=crop&q=80&w=600",
+      ]),
       inspectionRequired: false,
+      viewCount: 8,
       sellerId: amara.id,
     },
   });
@@ -125,9 +137,12 @@ async function main() {
         "16GB RAM, 512GB SSD. Perfect for programming, graphic design, and assignments. Battery lasts 4 hours on heavy use.",
       price: 245000,
       category: "Electronics",
-      condition: "Used (Good)",
-      location: "Alvan Hostel, UNN",
-      imageUrl: "https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?auto=format&fit=crop&q=80&w=600",
+      conditionType: "USED",
+      condition: "Good — minor bezel scratch",
+      location: "Hill Residence",
+      imagesJson: JSON.stringify([
+        "https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?auto=format&fit=crop&q=80&w=600",
+      ]),
       inspectionRequired: true,
       inspectionReportJson: JSON.stringify({
         imei: "98274092749028",
@@ -137,10 +152,45 @@ async function main() {
         repairsDetected: "SSD Upgraded",
         authenticity: "Verified Dell OEM",
         inspectionScore: 88,
-        inspectedBy: "CampusVerse Hub (Sub-Dome, UNN)",
+        inspectedBy: "CampusVerse Inspection Hub",
       }),
+      viewCount: 15,
       sellerId: emeka.id,
     },
+  });
+
+  await prisma.product.create({
+    data: {
+      title: "Engineering Mathematics Past Questions (2018-2024)",
+      description: "Compiled past questions with worked solutions for first and second year engineering courses.",
+      price: 3500,
+      category: "Past Questions",
+      conditionType: "NEW",
+      condition: "Printed and spiral-bound",
+      location: "Science Area",
+      imagesJson: JSON.stringify([
+        "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&q=80&w=600",
+      ]),
+      inspectionRequired: false,
+      viewCount: 21,
+      sellerId: amara.id,
+    },
+  });
+
+  // A live, currently-featured listing so the promotion system has something to show on first load.
+  await prisma.promotion.create({
+    data: {
+      productId: iphone.id,
+      buyerId: chinedu.id,
+      tier: "FEATURED",
+      days: 3,
+      cost: 1500,
+      expiresAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+    },
+  });
+  await prisma.product.update({
+    where: { id: iphone.id },
+    data: { promotionTier: "FEATURED", promotionExpiresAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000) },
   });
 
   console.log("Seeded users (password123 for all):");

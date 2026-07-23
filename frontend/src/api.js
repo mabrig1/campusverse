@@ -26,8 +26,27 @@ export const api = {
   login: (payload) => request("/auth/login", { method: "POST", body: JSON.stringify(payload) }),
   me: () => request("/me"),
 
-  getProducts: () => request("/products"),
+  getProducts: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== ""))
+    ).toString();
+    return request(`/products${qs ? `?${qs}` : ""}`);
+  },
+  getProduct: (id) => request(`/products/${id}`),
   createProduct: (payload) => request("/products", { method: "POST", body: JSON.stringify(payload) }),
+  promoteProduct: (id, tier, days) =>
+    request(`/products/${id}/promote`, { method: "POST", body: JSON.stringify({ tier, days }) }),
+  reportProduct: (id, reason) =>
+    request(`/products/${id}/report`, { method: "POST", body: JSON.stringify({ reason }) }),
+
+  getFavorites: () => request("/favorites"),
+  addFavorite: (productId) => request(`/favorites/${productId}`, { method: "POST" }),
+  removeFavorite: (productId) => request(`/favorites/${productId}`, { method: "DELETE" }),
+
+  getCampusLocations: () => request("/campus-locations"),
+  getMarketplaceCategories: () => request("/marketplace-categories"),
+  getPromotionPricing: () => request("/promotion-pricing"),
+  getReportReasons: () => request("/report-reasons"),
 
   getServices: () => request("/services"),
   getDirectory: () => request("/directory"),

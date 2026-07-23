@@ -46,6 +46,10 @@ model User {
 
   escrowsAsBuyer  EscrowTransaction[] @relation("Buyer")
   escrowsAsSeller EscrowTransaction[] @relation("Seller")
+
+  favorites  Favorite[]
+  reports    Report[]
+  promotions Promotion[]
 }
 
 // ---------- Wallet (ported from CampusHub's atomic-charge pattern) ----------
@@ -82,28 +86,102 @@ model Transaction {
 
 // ---------- Marketplace (peer-to-peer, not storefront — CampusVerse's own shape) ----------
 
+enum ConditionType {
+  NEW
+  USED
+}
+
+enum PromotionTier {
+  NONE
+  PINNED
+  HIGHLIGHTED
+  FEATURED
+}
+
 model Product {
-  id                   String   @id @default(cuid())
+  id                   String        @id @default(cuid())
   title                String
   description          String
   price                Float
+  // Validated against the shared category config (backend/src/campus-config.js)
+  // rather than a fixed DB enum, so the list can grow without a migration.
   category             String
+  conditionType         ConditionType @default(USED)
+  // Free-text condition detail (e.g. "Like new", "Minor scratch") shown
+  // alongside the strict New/Used badge — kept separate from conditionType.
   condition            String
+  // Validated against the shared campus-location config, same reasoning as category.
   location             String
-  imageUrl             String
-  stock                Int      @default(1)
-  inspectionRequired   Boolean  @default(false)
+  // JSON-encoded array of image URLs — first is the cover image.
+  imagesJson           String
+  stock                Int           @default(1)
+  inspectionRequired   Boolean       @default(false)
   // JSON-encoded inspection certificate (imei, serialNumber, batteryHealth, ...)
   inspectionReportJson String?
-  seller               User     @relation(fields: [sellerId], references: [id])
+  viewCount            Int           @default(0)
+  promotionTier        PromotionTier @default(NONE)
+  promotionExpiresAt   DateTime?
+  seller               User          @relation(fields: [sellerId], references: [id])
   sellerId             String
-  createdAt            DateTime @default(now())
+  createdAt            DateTime      @default(now())
 
-  reviews Review[]
-  escrows EscrowTransaction[] @relation("ProductEscrows")
+  reviews     Review[]
+  escrows     EscrowTransaction[] @relation("ProductEscrows")
+  favoritedBy Favorite[]
+  reports     Report[]
+  promotions  Promotion[]
 
   @@index([sellerId])
   @@index([category])
+  @@index([location])
+  @@index([promotionTier])
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  product   Product  @relation(fields: [productId], references: [id])
+  productId String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+  @@index([productId])
+}
+
+model Report {
+  id        String   @id @default(cuid())
+  reporter  User     @relation(fields: [reporterId], references: [id])
+  reporterId String
+  product   Product  @relation(fields: [productId], references: [id])
+  productId String
+  reason    String
+  status    String   @default("pending") // pending -> reviewed -> dismissed (admin moderation is a follow-up pass)
+  createdAt DateTime @default(now())
+
+  @@index([productId])
+  @@index([status])
+}
+
+// Payment is simulated — no live Paystack/Flutterwave/Monnify call. This
+// records promotion "purchases" in the shape a real gateway integration
+// would need (provider/reference columns ready, unused until wired up).
+model Promotion {
+  id            String        @id @default(cuid())
+  product       Product       @relation(fields: [productId], references: [id])
+  productId     String
+  buyer         User          @relation(fields: [buyerId], references: [id])
+  buyerId       String
+  tier          PromotionTier
+  days          Int
+  cost          Float
+  provider      String        @default("SIMULATED")
+  paymentStatus String        @default("PAID")
+  purchasedAt   DateTime      @default(now())
+  expiresAt     DateTime
+
+  @@index([productId])
+  @@index([buyerId])
 }
 
 model Review {
