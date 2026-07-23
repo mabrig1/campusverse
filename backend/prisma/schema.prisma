@@ -1,0 +1,151 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+// SQLite for local dev / a single-instance deployment, same tradeoff CampusHub
+// documents: one persistent-disk process, not serverless. Swap provider to
+// "postgresql" and point DATABASE_URL at a real Postgres instance before
+// running this behind more than one backend instance.
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Identity, trust & KYC ----------
+
+enum Role {
+  STUDENT
+  ADMIN
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  passwordHash String
+  role      Role     @default(STUDENT)
+  regNo     String?
+  hostel    String?
+  phone     String?
+  avatarUrl String?
+  createdAt DateTime @default(now())
+
+  // Trust & KYC telemetry (mirrors the existing /api/trust-score inputs) —
+  // persisted per-user instead of living only in frontend React state.
+  phoneVerified     Boolean @default(false)
+  emailVerified     Boolean @default(false)
+  studentIdVerified Boolean @default(false)
+  selfieVerified    Boolean @default(false)
+  ninVerified       Boolean @default(false)
+  bvnVerified       Boolean @default(false)
+  disputeCount      Int     @default(0)
+
+  wallet   Wallet?
+  products Product[]
+  reviews  Review[]
+
+  escrowsAsBuyer  EscrowTransaction[] @relation("Buyer")
+  escrowsAsSeller EscrowTransaction[] @relation("Seller")
+}
+
+// ---------- Wallet (ported from CampusHub's atomic-charge pattern) ----------
+
+model Wallet {
+  id           String        @id @default(cuid())
+  balance      Float         @default(0)
+  user         User          @relation(fields: [userId], references: [id])
+  userId       String        @unique
+  transactions Transaction[]
+  createdAt    DateTime      @default(now())
+}
+
+enum TransactionType {
+  TOPUP
+  TRANSFER_IN
+  TRANSFER_OUT
+  ESCROW_LOCK
+  ESCROW_RELEASE
+  ESCROW_REFUND
+}
+
+model Transaction {
+  id        String          @id @default(cuid())
+  wallet    Wallet          @relation(fields: [walletId], references: [id])
+  walletId  String
+  type      TransactionType
+  amount    Float
+  note      String
+  createdAt DateTime        @default(now())
+
+  @@index([walletId])
+}
+
+// ---------- Marketplace (peer-to-peer, not storefront — CampusVerse's own shape) ----------
+
+model Product {
+  id                   String   @id @default(cuid())
+  title                String
+  description          String
+  price                Float
+  category             String
+  condition            String
+  location             String
+  imageUrl             String
+  stock                Int      @default(1)
+  inspectionRequired   Boolean  @default(false)
+  // JSON-encoded inspection certificate (imei, serialNumber, batteryHealth, ...)
+  inspectionReportJson String?
+  seller               User     @relation(fields: [sellerId], references: [id])
+  sellerId             String
+  createdAt            DateTime @default(now())
+
+  reviews Review[]
+  escrows EscrowTransaction[] @relation("ProductEscrows")
+
+  @@index([sellerId])
+  @@index([category])
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  rating    Int
+  comment   String
+  author    User     @relation(fields: [authorId], references: [id])
+  authorId  String
+  product   Product  @relation(fields: [productId], references: [id])
+  productId String
+  createdAt DateTime @default(now())
+
+  @@index([productId])
+}
+
+// ---------- Escrow engine (CampusVerse's distinguishing feature) ----------
+
+enum EscrowStatus {
+  FUNDS_LOCKED
+  INSPECTED
+  FUNDS_RELEASED
+  DISPUTED
+  REFUNDED
+}
+
+model EscrowTransaction {
+  id                String       @id @default(cuid())
+  product           Product      @relation("ProductEscrows", fields: [productId], references: [id])
+  productId         String
+  buyer             User         @relation("Buyer", fields: [buyerId], references: [id])
+  buyerId           String
+  seller            User         @relation("Seller", fields: [sellerId], references: [id])
+  sellerId          String
+  price             Float
+  status            EscrowStatus @default(FUNDS_LOCKED)
+  inspectionStatus  String       @default("pending")
+  inspectionScore   Int          @default(0)
+  disputeStatus     String       @default("none")
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@index([productId])
+  @@index([buyerId])
+  @@index([sellerId])
+}

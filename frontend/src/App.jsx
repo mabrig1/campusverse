@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
-
-// API Configuration
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+import { useState, useEffect } from 'react';
+import { api, setAuthToken } from './api';
+import AuthScreen from './AuthScreen';
+import WalletTab from './WalletTab';
+import SellModal from './SellModal';
 
 // SVG Icons
 const Icons = {
@@ -35,6 +36,11 @@ const Icons = {
       <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
     </svg>
   ),
+  Wallet: () => (
+    <svg className="nav-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/>
+    </svg>
+  ),
   Search: () => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
@@ -50,11 +56,6 @@ const Icons = {
       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>
     </svg>
   ),
-  Lock: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-    </svg>
-  ),
   MapPin: () => (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>
@@ -63,34 +64,23 @@ const Icons = {
 };
 
 export default function App() {
+  const [token, setToken] = useState(() => {
+    const stored = localStorage.getItem('cv_token');
+    if (stored) setAuthToken(stored);
+    return stored;
+  });
+  const [user, setUser] = useState(null);
   const [currentTab, setCurrentTab] = useState('dashboard');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
-
-  // User States & Biometrics
-  const [userProfile, setUserProfile] = useState({
-    name: 'Obinna Eze',
-    regNo: '2023/149819',
-    hostel: 'Franco Hostel, UNN',
-    phoneVerified: true,
-    emailVerified: true,
-    studentIdVerified: false,
-    selfieVerified: false,
-    ninVerified: false,
-    bvnVerified: false,
-    tradesCount: 3,
-    disputeCount: 0,
-    trustScore: 45,
-    trustLevel: 'Verified Student'
-  });
+  const [showSellModal, setShowSellModal] = useState(false);
 
   // DB States
   const [products, setProducts] = useState([]);
   const [services, setServices] = useState([]);
   const [directory, setDirectory] = useState([]);
-  const [escrowList, setEscrowList] = useState([]);
   const [activeEscrow, setActiveEscrow] = useState(null);
-  
+
   // Custom interactive variables
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -99,9 +89,8 @@ export default function App() {
   const [bvnInput, setBvnInput] = useState('');
   const [ninInput, setNinInput] = useState('');
   const [studentIdInput, setStudentIdInput] = useState('');
-  const [selfieMock, setSelfieMock] = useState(false);
-  
-  // New Feed Post form
+
+  // New Feed Post form (local-only social feed — not backed by the API yet)
   const [feedPosts, setFeedPosts] = useState([
     {
       id: 1,
@@ -134,8 +123,8 @@ export default function App() {
   const [newPostContent, setNewPostContent] = useState('');
   const [newPostTag, setNewPostTag] = useState('General Discussion');
 
-  // Simulated Device Fingerprint
-  const [deviceFingerprint, setDeviceFingerprint] = useState({
+  // Simulated Device Fingerprint (anti-fraud telemetry demo, unrelated to real user identity)
+  const [deviceFingerprint] = useState({
     fingerprint: 'CV-F3B900D8A201',
     ip: '102.89.44.11',
     browser: 'Mozilla/Chrome Windows NT 10.0',
@@ -143,150 +132,93 @@ export default function App() {
     riskLevel: 'Low (Safe)'
   });
 
-  // Load backend content
-  useEffect(() => {
-    fetchBackendData();
-    calculateTrustScore(userProfile);
-  }, []);
+  const showToast = (text) => {
+    setMessage(text);
+    setTimeout(() => setMessage(null), 4000);
+  };
 
   const fetchBackendData = async () => {
     setLoading(true);
     try {
-      const prodRes = await fetch(`${API_BASE}/products`).then(r => r.json());
+      const [prodRes, srvRes, dirRes] = await Promise.all([
+        api.getProducts(),
+        api.getServices(),
+        api.getDirectory(),
+      ]);
       setProducts(prodRes);
-      const srvRes = await fetch(`${API_BASE}/services`).then(r => r.json());
       setServices(srvRes);
-      const dirRes = await fetch(`${API_BASE}/directory`).then(r => r.json());
       setDirectory(dirRes);
     } catch (err) {
-      console.warn("Backend not active, using local mock fallbacks");
-      // Fallback mocks
-      setProducts([
-        {
-          id: 'prod-001',
-          title: 'iPhone 12 Pro Max (128GB)',
-          description: 'Clean UK-used. Battery health 88%. True Tone active, Face ID functional. Selling because I need to buy textbooks and pay hostel fees.',
-          price: 380000,
-          category: 'Electronics',
-          condition: 'Used (Excellent)',
-          location: 'Franco Hostel, UNN',
-          seller: { name: 'Chinedu Okafor', verified: true, trustScore: 89, avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200' },
-          images: ['https://images.unsplash.com/photo-1616348436168-de43ad0db179?auto=format&fit=crop&q=80&w=600'],
-          inspectionRequired: true,
-          inspectionReport: { imei: '357289110482937', serialNumber: 'G0NFC17BN7FD', batteryHealth: '88%', screenCondition: 'Original - No scratches', repairsDetected: 'None', authenticity: 'Verified Original Apple', inspectionScore: 94, inspectedBy: 'CampusVerse Hub (Franco, UNN)' }
-        },
-        {
-          id: 'prod-002',
-          title: 'Modern Study Desk & Ergonomic Chair',
-          description: 'Very sturdy wooden desk with a metal frame. Comes with a comfortable mesh office chair. Perfect for studying at night.',
-          price: 65000,
-          category: 'Hostel Furniture',
-          condition: 'Used (Like New)',
-          location: 'Odim Gate area, Nsukka',
-          seller: { name: 'Amara Nwosu', verified: true, trustScore: 92, avatarUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=200' },
-          images: ['https://images.unsplash.com/photo-1518455027359-f3f8164ba6bd?auto=format&fit=crop&q=80&w=600'],
-          inspectionRequired: false
-        },
-        {
-          id: 'prod-003',
-          title: 'Dell Latitude 7490 Core i7',
-          description: '16GB RAM, 512GB SSD. Perfect for programming, graphic design, and assignments. Battery lasts 4 hours on heavy use.',
-          price: 245000,
-          category: 'Electronics',
-          condition: 'Used (Good)',
-          location: 'Alvan Hostel, UNN',
-          seller: { name: 'Emeka Eze', verified: false, trustScore: 45, avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200' },
-          images: ['https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?auto=format&fit=crop&q=80&w=600'],
-          inspectionRequired: true,
-          inspectionReport: { imei: '98274092749028', serialNumber: '9J8XW42', batteryHealth: '82%', screenCondition: 'Minor bezel scratch, panel original', repairsDetected: 'SSD Upgraded', authenticity: 'Verified Dell OEM', inspectionScore: 88, inspectedBy: 'CampusVerse Hub (Sub-Dome, UNN)' }
-        }
-      ]);
-      setServices([
-        {
-          id: 'srv-001',
-          title: 'Professional CV & LinkedIn Profile Writing',
-          description: 'Tailored specifically for Nigerian students applying for internships, remote tech jobs, or scholarships.',
-          price: 5000,
-          rating: 4.9,
-          reviewsCount: 32,
-          provider: { name: 'Tobi Daniels', department: 'UNN Faculty of Law', avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=200', skills: ['CV Optimization', 'LinkedIn Branding'], trustScore: 96 }
-        },
-        {
-          id: 'srv-002',
-          title: 'React & Node.js Website Development',
-          description: 'Building custom websites, portfolios, and startup landing pages. High performance and mobile responsive guaranteed.',
-          price: 45000,
-          rating: 5.0,
-          reviewsCount: 14,
-          provider: { name: 'Ibrahim Bello', department: 'UNN Electronic Engineering', avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=200', skills: ['React.js', 'Node.js', 'PostgreSQL'], trustScore: 98 }
-        }
-      ]);
-      setDirectory([
-        {
-          id: 'biz-001',
-          name: 'Odim Gate Printing & Business Hub',
-          category: 'Business Center',
-          location: 'Odim Gate, Nsukka',
-          description: 'Affordable printing, scanning, photocopy, and thesis binding. Open from 7 AM to 9 PM daily.',
-          rating: 4.6,
-          reviewsCount: 104,
-          verified: true,
-          logoUrl: 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&q=80&w=200'
-        },
-        {
-          id: 'biz-002',
-          name: 'Franco Hostel Shuttle & Logistics',
-          category: 'Transportation',
-          location: 'Franco Car Park, UNN',
-          description: 'Reliable moving service from town to hostels, and campus shuttles. Student-friendly rates.',
-          rating: 4.7,
-          reviewsCount: 88,
-          verified: true,
-          logoUrl: 'https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?auto=format&fit=crop&q=80&w=200'
-        }
-      ]);
+      showToast(`Couldn't reach the CampusVerse backend: ${err.message}`);
     } finally {
       setLoading(false);
     }
   };
 
-  const calculateTrustScore = async (profile) => {
-    try {
-      const response = await fetch(`${API_BASE}/trust-score`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(profile)
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setUserProfile(prev => ({
-          ...prev,
-          trustScore: data.trustScore,
-          trustLevel: data.level
-        }));
+  const handleAuthenticated = (newToken, newUser) => {
+    localStorage.setItem('cv_token', newToken);
+    setAuthToken(newToken);
+    setToken(newToken);
+    setUser(newUser);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('cv_token');
+    setAuthToken(null);
+    setToken(null);
+    setUser(null);
+    setCurrentTab('dashboard');
+  };
+
+  // Load backend content once authenticated
+  useEffect(() => {
+    if (!token) return;
+    (async () => {
+      try {
+        setUser(await api.me());
+      } catch {
+        handleLogout();
+        return;
       }
+      fetchBackendData();
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  if (!token || !user) {
+    return <AuthScreen onAuthenticated={handleAuthenticated} />;
+  }
+
+  // Student ID Verify
+  const verifyStudentID = async () => {
+    if (!studentIdInput.trim()) {
+      showToast('Please enter your UNN Registration Number');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await api.verifyStudentId(studentIdInput);
+      setUser(res.user);
+      showToast(res.message);
     } catch (err) {
-      // Fallback math
-      let score = 25;
-      if (profile.phoneVerified) score += 10;
-      if (profile.emailVerified) score += 10;
-      if (profile.studentIdVerified) score += 15;
-      if (profile.selfieVerified) score += 15;
-      if (profile.ninVerified) score += 10;
-      if (profile.bvnVerified) score += 15;
-      
-      let level = 'Verified Student';
-      if (score >= 50 && score < 75) level = 'Verified Peer';
-      if (score >= 75 && score < 90) level = 'Trusted Trader';
-      if (score >= 90) level = 'Elite Campus Partner';
-      
-      setUserProfile(prev => ({ ...prev, trustScore: score, trustLevel: level }));
+      showToast(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const showToast = (text) => {
-    setMessage(text);
-    setTimeout(() => setMessage(null), 4000);
+  // Selfie Biometric Match
+  const verifySelfieBiometrics = async () => {
+    setLoading(true);
+    try {
+      const res = await api.verifySelfie();
+      setUser(res.user);
+      showToast(`Selfie verification: ${res.message} (${res.matchConfidence}% Match)`);
+    } catch (err) {
+      showToast(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   // NIN Sim
@@ -297,25 +229,11 @@ export default function App() {
     }
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE}/verify/nin`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nin: ninInput })
-      });
-      const data = await response.json();
-      if (response.ok) {
-        const updated = { ...userProfile, ninVerified: true };
-        setUserProfile(updated);
-        calculateTrustScore(updated);
-        showToast(`NIN matching successful: ${data.data.fullName}`);
-      } else {
-        showToast(data.message || 'NIN verification failed');
-      }
-    } catch {
-      const updated = { ...userProfile, ninVerified: true };
-      setUserProfile(updated);
-      calculateTrustScore(updated);
-      showToast('NIN matches NIMC identity record (Simulated)');
+      const res = await api.verifyNin(ninInput);
+      setUser(res.user);
+      showToast(`NIN matching successful: ${res.data.fullName}`);
+    } catch (err) {
+      showToast(err.message);
     } finally {
       setLoading(false);
     }
@@ -329,65 +247,11 @@ export default function App() {
     }
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE}/verify/bvn`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bvn: bvnInput })
-      });
-      const data = await response.json();
-      if (response.ok) {
-        const updated = { ...userProfile, bvnVerified: true };
-        setUserProfile(updated);
-        calculateTrustScore(updated);
-        showToast(`BVN matching successful: Verified with ${data.data.bankVerified}`);
-      } else {
-        showToast(data.message || 'BVN verification failed');
-      }
-    } catch {
-      const updated = { ...userProfile, bvnVerified: true };
-      setUserProfile(updated);
-      calculateTrustScore(updated);
-      showToast('BVN matches biometric bank account (Simulated)');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Student ID Verify
-  const verifyStudentID = () => {
-    if (!studentIdInput.trim()) {
-      showToast('Please enter your UNN Registration Number');
-      return;
-    }
-    const updated = { ...userProfile, studentIdVerified: true, regNo: studentIdInput };
-    setUserProfile(updated);
-    calculateTrustScore(updated);
-    showToast('UNN Student Record verified: ' + studentIdInput.toUpperCase());
-  };
-
-  // Selfie Biometric Match
-  const verifySelfieBiometrics = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch(`${API_BASE}/verify/selfie`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ selfieBase64: 'mock_base64_data' })
-      });
-      const data = await response.json();
-      if (response.ok) {
-        const updated = { ...userProfile, selfieVerified: true };
-        setUserProfile(updated);
-        calculateTrustScore(updated);
-        setSelfieMock(true);
-        showToast(`Selfie verification: ${data.message} (${data.matchConfidence}% Match)`);
-      }
-    } catch {
-      const updated = { ...userProfile, selfieVerified: true };
-      setUserProfile(updated);
-      calculateTrustScore(updated);
-      setSelfieMock(true);
-      showToast('Face biometrics matching matches student ID card');
+      const res = await api.verifyBvn(bvnInput);
+      setUser(res.user);
+      showToast(`BVN matching successful: Verified with ${res.data.bankVerified}`);
+    } catch (err) {
+      showToast(err.message);
     } finally {
       setLoading(false);
     }
@@ -401,72 +265,26 @@ export default function App() {
     }
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE}/verify/imei`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imei: imeiInput })
-      });
-      const data = await response.json();
+      const data = await api.verifyImei(imeiInput);
       setImeiReport(data);
-      if (data.clean) {
-        showToast('IMEI Clean! Device safe for buy/sell.');
-      } else {
-        showToast('WARNING: This device is flagged as stolen/blacklisted!');
-      }
-    } catch {
-      const isClean = imeiInput !== '357289110482937';
-      setImeiReport({
-        imei: imeiInput,
-        clean: isClean,
-        status: isClean ? 'Clean' : 'Blacklisted / Reported Stolen',
-        source: 'Checked offline db',
-        carrierLock: 'Unlocked'
-      });
-      if (isClean) {
-        showToast('IMEI Check: Clean (Simulated)');
-      } else {
-        showToast('WARNING: Stolen device flagged (Simulated)');
-      }
+      showToast(data.clean ? 'IMEI Clean! Device safe for buy/sell.' : 'WARNING: This device is flagged as stolen/blacklisted!');
+    } catch (err) {
+      showToast(err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  // Initialize Escrow
+  // Initialize Escrow (locks real wallet funds server-side)
   const startEscrowBuy = async (product) => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE}/escrow`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          productId: product.id,
-          buyerName: userProfile.name
-        })
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setActiveEscrow(data);
-        setCurrentTab('escrow');
-        showToast(`Escrow transaction created! Funds locked: ₦${product.price.toLocaleString()}`);
-      }
-    } catch {
-      // Mock start
-      const mockTx = {
-        id: `tx-${Math.floor(1000 + Math.random() * 9000)}`,
-        productId: product.id,
-        productName: product.title,
-        sellerName: product.seller.name,
-        buyerName: userProfile.name,
-        price: product.price,
-        status: 'funds_locked',
-        inspectionStatus: product.inspectionRequired ? 'pending' : 'not_required',
-        inspectionScore: product.inspectionRequired ? (product.inspectionReport?.inspectionScore || 90) : 100,
-        timestamp: new Date().toISOString()
-      };
-      setActiveEscrow(mockTx);
+      const tx = await api.startEscrow(product.id);
+      setActiveEscrow(tx);
       setCurrentTab('escrow');
-      showToast(`Escrow initialized (Local Mode). Funds Locked: ₦${product.price.toLocaleString()}`);
+      showToast(`Escrow transaction created! Funds locked: ₦${product.price.toLocaleString()}`);
+    } catch (err) {
+      showToast(err.message);
     } finally {
       setLoading(false);
     }
@@ -477,40 +295,13 @@ export default function App() {
     if (!activeEscrow) return;
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE}/escrow/${activeEscrow.id}/action`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action })
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setActiveEscrow(data);
-        if (action === 'inspect') showToast('Hub Inspection Complete: Verified Passed!');
-        if (action === 'approve') showToast('Funds released to the seller successfully!');
-        if (action === 'dispute') showToast('Dispute opened. A CampusVerse support officer is assigned.');
-      }
-    } catch {
-      let updatedStatus = activeEscrow.status;
-      let inspectionStatus = activeEscrow.inspectionStatus;
-      
-      if (action === 'inspect') {
-        updatedStatus = 'inspected';
-        inspectionStatus = 'passed';
-      } else if (action === 'approve') {
-        updatedStatus = 'funds_released';
-      } else if (action === 'dispute') {
-        updatedStatus = 'disputed';
-      }
-      
-      setActiveEscrow(prev => ({
-        ...prev,
-        status: updatedStatus,
-        inspectionStatus: inspectionStatus
-      }));
-      
-      if (action === 'inspect') showToast('Hub Inspection Completed! Quality Certified (Simulated).');
-      if (action === 'approve') showToast('Payment Released to Seller (Simulated).');
-      if (action === 'dispute') showToast('Dispute logged to arbitration desk (Simulated).');
+      const tx = await api.escrowAction(activeEscrow.id, action);
+      setActiveEscrow(tx);
+      if (action === 'inspect') showToast('Hub Inspection Complete: Verified Passed!');
+      if (action === 'approve') showToast('Funds released to the seller successfully!');
+      if (action === 'dispute') showToast('Dispute opened. A CampusVerse support officer is assigned.');
+    } catch (err) {
+      showToast(err.message);
     } finally {
       setLoading(false);
     }
@@ -532,8 +323,8 @@ export default function App() {
     if (!newPostContent.trim()) return;
     const newPost = {
       id: feedPosts.length + 1,
-      author: userProfile.name,
-      details: `${userProfile.regNo} • Just now`,
+      author: user.name,
+      details: `${user.regNo || 'CampusVerse'} • Just now`,
       tag: newPostTag,
       content: newPostContent,
       likes: 0,
@@ -592,6 +383,9 @@ export default function App() {
           <a href="#" className={`nav-item ${currentTab === 'directory' ? 'active' : ''}`} onClick={() => setCurrentTab('directory')}>
             <Icons.Directory /> <span>Local Directory</span>
           </a>
+          <a href="#" className={`nav-item ${currentTab === 'wallet' ? 'active' : ''}`} onClick={() => setCurrentTab('wallet')}>
+            <Icons.Wallet /> <span>Wallet</span>
+          </a>
           <a href="#" className={`nav-item ${currentTab === 'trust' ? 'active' : ''}`} onClick={() => setCurrentTab('trust')}>
             <Icons.Trust /> <span>Trust & KYC</span>
           </a>
@@ -603,9 +397,17 @@ export default function App() {
         <div className="sidebar-user">
           <img className="user-avatar" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200" alt="User avatar" />
           <div className="user-info">
-            <span className="user-name">{userProfile.name}</span>
-            <span className="user-trust-badge">🛡️ {userProfile.trustScore}% Trust Score</span>
+            <span className="user-name">{user.name}</span>
+            <span className="user-trust-badge">🛡️ {user.trustScore}% Trust Score</span>
           </div>
+          <button
+            className="action-btn"
+            style={{ marginLeft: 'auto', fontSize: '11px' }}
+            onClick={handleLogout}
+            title="Log out"
+          >
+            Log out
+          </button>
         </div>
       </aside>
 
@@ -618,6 +420,7 @@ export default function App() {
               {currentTab === 'marketplace' && 'UNN Student Marketplace'}
               {currentTab === 'services' && 'Student Service Economy'}
               {currentTab === 'directory' && 'Nsukka Business Directory'}
+              {currentTab === 'wallet' && 'CampusVerse Wallet'}
               {currentTab === 'trust' && 'Campus Biometric & Identity Trust'}
               {currentTab === 'escrow' && 'Escrow Payment Terminal'}
             </h1>
@@ -626,6 +429,7 @@ export default function App() {
               {currentTab === 'marketplace' && 'Secure buying and selling within Nsukka'}
               {currentTab === 'services' && 'Hire student talent or view professional portfolios'}
               {currentTab === 'directory' && 'Find verified restaurants, printing hubs, and shuttles'}
+              {currentTab === 'wallet' && 'Top up, send money, and track every transaction'}
               {currentTab === 'trust' && 'Dynamic safety score calculation and fraud telemetry'}
               {currentTab === 'escrow' && 'Milestone escrow contract protection'}
             </span>
@@ -633,10 +437,10 @@ export default function App() {
 
           <div className="search-container">
             <Icons.Search />
-            <input 
-              type="text" 
-              className="search-input" 
-              placeholder="Search products, services, hostels, forums..." 
+            <input
+              type="text"
+              className="search-input"
+              placeholder="Search products, services, hostels, forums..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -650,7 +454,7 @@ export default function App() {
         )}
 
         {/* Tab contents */}
-        
+
         {/* News Feed Tab */}
         {currentTab === 'dashboard' && (
           <div className="dashboard-grid">
@@ -658,8 +462,8 @@ export default function App() {
               {/* Write Post Box */}
               <form onSubmit={handleCreatePost} className="glass-panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <h3 style={{ fontSize: '15px', fontWeight: '600' }}>Post to Student Forum</h3>
-                <textarea 
-                  className="form-input" 
+                <textarea
+                  className="form-input"
                   style={{ minHeight: '80px', resize: 'vertical' }}
                   placeholder="Share what is happening on campus or look for items..."
                   value={newPostContent}
@@ -667,8 +471,8 @@ export default function App() {
                   maxLength={300}
                 ></textarea>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <select 
-                    className="form-input" 
+                  <select
+                    className="form-input"
                     style={{ padding: '6px 12px', fontSize: '12px' }}
                     value={newPostTag}
                     onChange={(e) => setNewPostTag(e.target.value)}
@@ -689,7 +493,7 @@ export default function App() {
               {feedPosts.filter(p => p.content.toLowerCase().includes(searchQuery.toLowerCase()) || p.tag.toLowerCase().includes(searchQuery.toLowerCase())).map(post => (
                 <article key={post.id} className="glass-panel post-card">
                   <div className="post-header">
-                    <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: 'var(--accent-purple)', display: 'flex', alignItems: 'center', justifycontent: 'center', fontWeight: 'bold' }}>
+                    <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: 'var(--accent-purple)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
                       {post.author[0]}
                     </div>
                     <div className="post-meta">
@@ -719,11 +523,11 @@ export default function App() {
                   <Icons.ShieldCheck />
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px' }}>
-                  <div className="trust-score-circle" style={{ width: '70px', height: '70px', fontSize: '18px', '--score-percent': `${userProfile.trustScore}%` }}>
-                    {userProfile.trustScore}%
+                  <div className="trust-score-circle" style={{ width: '70px', height: '70px', fontSize: '18px', '--score-percent': `${user.trustScore}%` }}>
+                    {user.trustScore}%
                   </div>
                   <div>
-                    <h4 style={{ fontSize: '16px', fontWeight: '600' }}>{userProfile.trustLevel}</h4>
+                    <h4 style={{ fontSize: '16px', fontWeight: '600' }}>{user.trustLevel}</h4>
                     <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Status: Active Account</span>
                   </div>
                 </div>
@@ -765,7 +569,19 @@ export default function App() {
         {/* Product Marketplace Tab */}
         {currentTab === 'marketplace' && (
           <div>
-            {/* IMEI and stolen check banner */}
+            {/* Sell CTA + IMEI check banner */}
+            <div className="glass-panel" style={{ padding: '20px', marginBottom: '28px', display: 'flex', justifyContent: 'space-between', gap: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <div>
+                <h3 style={{ fontSize: '16px', fontWeight: '600' }}>List something for sale</h3>
+                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px', maxWidth: '420px' }}>
+                  Reach verified students across UNN. Escrow-protected sales build your trust score.
+                </p>
+              </div>
+              <button className="btn btn-accent" onClick={() => setShowSellModal(true)}>
+                <Icons.Plus /> Sell an Item
+              </button>
+            </div>
+
             <div className="glass-panel" style={{ padding: '20px', marginBottom: '28px', display: 'flex', justifyContent: 'space-between', gap: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
               <div>
                 <h3 style={{ fontSize: '16px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -776,9 +592,9 @@ export default function App() {
                 </p>
               </div>
               <div style={{ display: 'flex', gap: '8px', flexGrow: 1, maxWidth: '400px' }}>
-                <input 
-                  type="text" 
-                  className="form-input" 
+                <input
+                  type="text"
+                  className="form-input"
                   placeholder="Enter 15-digit IMEI or Serial No..."
                   style={{ flexGrow: 1 }}
                   value={imeiInput}
@@ -818,12 +634,12 @@ export default function App() {
                       {prod.inspectionRequired ? '🛡️ Inspected & Verified' : 'Unverified Listing'}
                     </span>
                   </div>
-                  
+
                   <div className="item-content">
                     <span className="item-category">{prod.category}</span>
                     <h3 className="item-title">{prod.title}</h3>
                     <div className="item-price">₦{prod.price.toLocaleString()}</div>
-                    
+
                     <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
                       <span className="post-tag" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)' }}>
                         {prod.condition}
@@ -849,14 +665,29 @@ export default function App() {
                           Specs
                         </button>
                       )}
-                      <button className="btn btn-accent" style={{ flexGrow: 2, padding: '8px' }} onClick={() => startEscrowBuy(prod)}>
-                        Buy Escrow
-                      </button>
+                      {prod.seller.id === user.id ? (
+                        <span className="post-tag" style={{ flexGrow: 2, textAlign: 'center', padding: '8px' }}>Your listing</span>
+                      ) : (
+                        <button className="btn btn-accent" style={{ flexGrow: 2, padding: '8px' }} onClick={() => startEscrowBuy(prod)}>
+                          Buy Escrow
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
               ))}
             </div>
+
+            {showSellModal && (
+              <SellModal
+                showToast={showToast}
+                onClose={() => setShowSellModal(false)}
+                onCreated={(product) => {
+                  setProducts((prev) => [product, ...prev]);
+                  setShowSellModal(false);
+                }}
+              />
+            )}
 
             {/* Product details and Inspection certificate modal */}
             {selectedProduct && (
@@ -864,17 +695,17 @@ export default function App() {
                 <div className="glass-panel modal-content" style={{ position: 'relative' }}>
                   <button className="modal-close" onClick={() => setSelectedProduct(null)}>✕</button>
                   <h2 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '16px' }}>🛡️ CampusVerse Inspection Certificate</h2>
-                  
+
                   <div style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(16,185,129,0.1)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(16,185,129,0.3)', marginBottom: '20px' }}>
                     <div>
                       <span style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--accent-emerald)' }}>Condition Grade</span>
                       <div style={{ fontSize: '24px', fontWeight: 'bold', color: 'var(--accent-emerald)' }}>
-                        {selectedProduct.inspectionReport.inspectionScore} / 100
+                        {selectedProduct.inspectionReport?.inspectionScore ?? '—'} / 100
                       </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
                       <span style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--accent-emerald)' }}>Inspected By</span>
-                      <div style={{ fontSize: '14px', fontWeight: '600' }}>{selectedProduct.inspectionReport.inspectedBy}</div>
+                      <div style={{ fontSize: '14px', fontWeight: '600' }}>{selectedProduct.inspectionReport?.inspectedBy}</div>
                     </div>
                   </div>
 
@@ -882,27 +713,27 @@ export default function App() {
                     <tbody>
                       <tr style={{ borderBottom: '1px solid var(--border-glass)' }}>
                         <td style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Device Serial Number:</td>
-                        <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: '500' }}>{selectedProduct.inspectionReport.serialNumber}</td>
+                        <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: '500' }}>{selectedProduct.inspectionReport?.serialNumber}</td>
                       </tr>
                       <tr style={{ borderBottom: '1px solid var(--border-glass)' }}>
                         <td style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>IMEI Number:</td>
-                        <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: '500' }}>{selectedProduct.inspectionReport.imei}</td>
+                        <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: '500' }}>{selectedProduct.inspectionReport?.imei}</td>
                       </tr>
                       <tr style={{ borderBottom: '1px solid var(--border-glass)' }}>
                         <td style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Battery State of Health:</td>
-                        <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: '500', color: 'var(--accent-emerald)' }}>{selectedProduct.inspectionReport.batteryHealth}</td>
+                        <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: '500', color: 'var(--accent-emerald)' }}>{selectedProduct.inspectionReport?.batteryHealth}</td>
                       </tr>
                       <tr style={{ borderBottom: '1px solid var(--border-glass)' }}>
                         <td style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Display Conditions:</td>
-                        <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: '500' }}>{selectedProduct.inspectionReport.screenCondition}</td>
+                        <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: '500' }}>{selectedProduct.inspectionReport?.screenCondition}</td>
                       </tr>
                       <tr style={{ borderBottom: '1px solid var(--border-glass)' }}>
                         <td style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Repair/Diagnostic History:</td>
-                        <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: '500' }}>{selectedProduct.inspectionReport.repairsDetected}</td>
+                        <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: '500' }}>{selectedProduct.inspectionReport?.repairsDetected}</td>
                       </tr>
                       <tr style={{ borderBottom: '1px solid var(--border-glass)' }}>
                         <td style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Authenticity Verification:</td>
-                        <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: '500', color: 'var(--accent-emerald)' }}>{selectedProduct.inspectionReport.authenticity}</td>
+                        <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: '500', color: 'var(--accent-emerald)' }}>{selectedProduct.inspectionReport?.authenticity}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -1022,7 +853,7 @@ export default function App() {
                     <h3 style={{ fontSize: '16px', fontWeight: '600', margin: '4px 0' }}>{biz.name}</h3>
                     <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '8px' }}>📍 {biz.location}</div>
                     <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.4' }}>{biz.description}</p>
-                    
+
                     <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
                       <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '12px' }} onClick={() => showToast(`Directions to: ${biz.name}`)}>
                         Get Directions
@@ -1072,15 +903,18 @@ export default function App() {
           </div>
         )}
 
+        {/* Wallet Tab */}
+        {currentTab === 'wallet' && <WalletTab showToast={showToast} />}
+
         {/* Identity & Trust Portal */}
         {currentTab === 'trust' && (
           <div>
             <div className="glass-panel trust-score-header-card">
               <div className="trust-circle-container">
-                <div className="trust-score-circle" style={{ '--score-percent': `${userProfile.trustScore}%` }}>
-                  {userProfile.trustScore}%
+                <div className="trust-score-circle" style={{ '--score-percent': `${user.trustScore}%` }}>
+                  {user.trustScore}%
                 </div>
-                <span className="user-trust-badge">🛡️ {userProfile.trustLevel}</span>
+                <span className="user-trust-badge">🛡️ {user.trustLevel}</span>
               </div>
               <div className="trust-score-details">
                 <h3 className="trust-tier">Safety Verification Telemetry</h3>
@@ -1089,12 +923,12 @@ export default function App() {
                 </p>
                 <div className="telemetry-row">
                   <div className="glass-panel telemetry-card">
-                    <span className="telemetry-value">₦0</span>
-                    <span className="telemetry-label">Disputed Escrow</span>
+                    <span className="telemetry-value">{user.disputeCount}</span>
+                    <span className="telemetry-label">Disputes Raised</span>
                   </div>
                   <div className="glass-panel telemetry-card">
-                    <span className="telemetry-value">98.4%</span>
-                    <span className="telemetry-label">Biometric Match</span>
+                    <span className="telemetry-value">{user.tradesCount}</span>
+                    <span className="telemetry-label">Completed Trades</span>
                   </div>
                   <div className="glass-panel telemetry-card">
                     <span className="telemetry-value">{deviceFingerprint.riskLevel}</span>
@@ -1108,22 +942,22 @@ export default function App() {
               {/* Mandatory Checklist */}
               <div className="glass-panel kyc-card">
                 <h3 style={{ fontSize: '16px', fontWeight: '600' }}>Mandatory Verification</h3>
-                
+
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '10px' }}>
                   <div className="kyc-status-row">
                     <div>
                       <strong>Phone Verification</strong>
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>+234 808 **** 542 (OTP matches telecom provider)</div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{user.phone || 'No phone on file'}</div>
                     </div>
-                    <span className="status-badge verified">Verified</span>
+                    <span className={`status-badge ${user.phoneVerified ? 'verified' : ''}`}>{user.phoneVerified ? 'Verified' : 'Unverified'}</span>
                   </div>
 
                   <div className="kyc-status-row">
                     <div>
                       <strong>Email Verification</strong>
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>o.eze@unn.edu.ng (UNN student domain matched)</div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{user.email}</div>
                     </div>
-                    <span className="status-badge verified">Verified</span>
+                    <span className={`status-badge ${user.emailVerified ? 'verified' : ''}`}>{user.emailVerified ? 'Verified' : 'Unverified'}</span>
                   </div>
 
                   <div className="kyc-status-row">
@@ -1131,14 +965,14 @@ export default function App() {
                       <strong>Student Records (UNN Portal)</strong>
                       <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>UNN Registrar validation database query</div>
                     </div>
-                    {userProfile.studentIdVerified ? (
+                    {user.studentIdVerified ? (
                       <span className="status-badge verified">Verified</span>
                     ) : (
                       <div style={{ display: 'flex', gap: '8px' }}>
-                        <input 
-                          type="text" 
-                          className="form-input" 
-                          placeholder="e.g. 2023/149819" 
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="e.g. 2023/149819"
                           style={{ padding: '6px', fontSize: '12px', width: '120px' }}
                           value={studentIdInput}
                           onChange={(e) => setStudentIdInput(e.target.value)}
@@ -1153,7 +987,7 @@ export default function App() {
                       <strong>Selfie Biometric Matching</strong>
                       <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Upload live photo to match student records</div>
                     </div>
-                    {userProfile.selfieVerified ? (
+                    {user.selfieVerified ? (
                       <span className="status-badge verified">Verified</span>
                     ) : (
                       <button className="btn" style={{ padding: '6px 12px', fontSize: '12px' }} onClick={verifySelfieBiometrics}>
@@ -1167,21 +1001,21 @@ export default function App() {
               {/* Advanced Nigerian Identity */}
               <div className="glass-panel kyc-card">
                 <h3 style={{ fontSize: '16px', fontWeight: '600' }}>Advanced KYC (Nigeria Specific)</h3>
-                
+
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '10px' }}>
                   <div className="kyc-status-row">
                     <div>
                       <strong>NIN Verification (NIMC Lookup)</strong>
                       <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>National Identification Number profile match</div>
                     </div>
-                    {userProfile.ninVerified ? (
+                    {user.ninVerified ? (
                       <span className="status-badge verified">Verified</span>
                     ) : (
                       <div style={{ display: 'flex', gap: '8px' }}>
-                        <input 
-                          type="password" 
-                          className="form-input" 
-                          placeholder="11-digit NIN" 
+                        <input
+                          type="password"
+                          className="form-input"
+                          placeholder="11-digit NIN"
                           style={{ padding: '6px', fontSize: '12px', width: '120px' }}
                           value={ninInput}
                           onChange={(e) => setNinInput(e.target.value)}
@@ -1196,14 +1030,14 @@ export default function App() {
                       <strong>BVN Matching (Bank Record)</strong>
                       <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Bank Verification Number registry alignment</div>
                     </div>
-                    {userProfile.bvnVerified ? (
+                    {user.bvnVerified ? (
                       <span className="status-badge verified">Verified</span>
                     ) : (
                       <div style={{ display: 'flex', gap: '8px' }}>
-                        <input 
-                          type="password" 
-                          className="form-input" 
-                          placeholder="11-digit BVN" 
+                        <input
+                          type="password"
+                          className="form-input"
+                          placeholder="11-digit BVN"
                           style={{ padding: '6px', fontSize: '12px', width: '120px' }}
                           value={bvnInput}
                           onChange={(e) => setBvnInput(e.target.value)}
@@ -1230,7 +1064,7 @@ export default function App() {
                 <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔒</div>
                 <h3 style={{ fontSize: '18px', fontWeight: '600' }}>No Active Escrow Transaction</h3>
                 <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '8px', marginBottom: '20px' }}>
-                  To inspect and simulate the escrow lifecycle, purchase any high-value device from the Marketplace tab.
+                  To inspect and run the escrow lifecycle, purchase any high-value device from the Marketplace tab.
                 </p>
                 <button className="btn" onClick={() => setCurrentTab('marketplace')}>Go to Marketplace</button>
               </div>
@@ -1239,7 +1073,7 @@ export default function App() {
                 {/* Stepper display */}
                 <div className="glass-panel" style={{ padding: '24px 20px', marginBottom: '32px' }}>
                   <h3 style={{ fontSize: '16px', fontWeight: '600' }}>Contract State: {activeEscrow.id} ({activeEscrow.productName})</h3>
-                  
+
                   <div className="escrow-stepper">
                     <div className={`escrow-step ${activeEscrow.status === 'funds_locked' || activeEscrow.status === 'inspected' || activeEscrow.status === 'funds_released' ? 'active' : ''} ${activeEscrow.status === 'inspected' || activeEscrow.status === 'funds_released' ? 'completed' : ''}`}>
                       1
@@ -1260,7 +1094,7 @@ export default function App() {
                 <div className="escrow-details-grid">
                   <div className="glass-panel" style={{ padding: '24px' }}>
                     <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '20px' }}>Campus Escrow Details</h3>
-                    
+
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '24px', fontSize: '14px' }}>
                       <div>
                         <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>BUYER</span>
@@ -1285,15 +1119,15 @@ export default function App() {
                     </div>
 
                     <div style={{ borderTop: '1px solid var(--border-glass)', paddingTop: '20px' }}>
-                      <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px' }}>Simulate Transaction Workflows</h4>
-                      
+                      <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px' }}>Escrow Workflow</h4>
+
                       {activeEscrow.status === 'funds_locked' && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                           <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                            Funds have been securely locked in the CampusVerse bank ledger. The seller has been notified to deliver the device to the **CampusVerse Inspection Hub (Sub-Dome Center)**.
+                            Funds have been securely locked in the CampusVerse wallet ledger. The seller has been notified to deliver the device to the **CampusVerse Inspection Hub (Sub-Dome Center)**.
                           </p>
                           <button className="btn btn-accent" onClick={() => runEscrowAction('inspect')}>
-                            Simulate Hub Inspection Report & Score
+                            Run Hub Inspection Report & Score
                           </button>
                         </div>
                       )}
@@ -1317,10 +1151,10 @@ export default function App() {
                       {activeEscrow.status === 'funds_released' && (
                         <div>
                           <p style={{ fontSize: '13px', color: 'var(--accent-emerald)', fontWeight: '500' }}>
-                            ✓ Funds successfully disbursed to the seller's account. This contract is closed.
+                            ✓ Funds successfully disbursed to the seller's wallet. This contract is closed.
                           </p>
                           <button className="btn btn-secondary" style={{ marginTop: '16px' }} onClick={() => setActiveEscrow(null)}>
-                            Reset Escrow Simulation
+                            Clear
                           </button>
                         </div>
                       )}
@@ -1331,7 +1165,7 @@ export default function App() {
                             ⚠ Transaction is in Dispute status. Support is reviewing logs & serial history.
                           </p>
                           <button className="btn btn-secondary" style={{ marginTop: '16px' }} onClick={() => setActiveEscrow(null)}>
-                            Reset Escrow Simulation
+                            Clear
                           </button>
                         </div>
                       )}
