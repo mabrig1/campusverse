@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "./src/db.js";
@@ -17,6 +18,11 @@ import {
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// This is a JSON API consumed cross-origin by the frontend's own Vercel
+// domain — helmet's default Cross-Origin-Resource-Policy (same-origin)
+// would block that, so it's relaxed here; CORS above is what actually
+// controls which origins may call these endpoints.
+app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 app.use(cors());
 app.use(express.json());
 
@@ -809,6 +815,14 @@ const mockDirectory = [
 app.get("/api/services", (req, res) => res.json(mockServices));
 app.get("/api/directory", (req, res) => res.json(mockDirectory));
 
-app.listen(PORT, () => {
-  console.log(`CampusVerse Backend running on port ${PORT}`);
-});
+// Vercel invokes the exported app as a request handler directly — it must
+// not also try to bind a TCP port. `VERCEL` is set automatically in that
+// environment; everywhere else (local dev, Docker, a VPS) this runs as a
+// normal long-lived Express server.
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`CampusVerse Backend running on port ${PORT}`);
+  });
+}
+
+export default app;

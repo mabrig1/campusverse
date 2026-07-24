@@ -2,12 +2,11 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// SQLite for local dev / a single-instance deployment, same tradeoff CampusHub
-// documents: one persistent-disk process, not serverless. Swap provider to
-// "postgresql" and point DATABASE_URL at a real Postgres instance before
-// running this behind more than one backend instance.
+// Postgres (Supabase) — required for the Vercel serverless deployment,
+// which has no persistent disk for SQLite and runs multiple function
+// instances that all need to share one database.
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
