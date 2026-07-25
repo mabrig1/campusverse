@@ -8,9 +8,11 @@ import "express-async-errors";
 import cors from "cors";
 import helmet from "helmet";
 import bcrypt from "bcryptjs";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { prisma } from "./src/db.js";
 import { signToken, requireAuth, optionalAuth } from "./src/auth.js";
+import { verifyGoogleIdToken, GoogleAuthNotConfiguredError } from "./src/google-auth.js";
 import { chargeWallet, creditWallet, InsufficientFundsError } from "./src/wallet.js";
 import { computeTrustScore } from "./src/trust-score.js";
 import {
@@ -188,6 +190,56 @@ app.post("/api/auth/login", async (req, res) => {
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
     return res.status(401).json({ error: "Invalid email or password" });
+  }
+
+  const token = signToken(user);
+  res.json({ token, user: await serializeUser(user) });
+});
+
+// "Sign in with Google" — the frontend uses Google Identity Services to get
+// an ID token straight from Google (no redirect flow needed for this app),
+// and this endpoint verifies that token server-side before treating it as
+// proof of identity. Reuses the same User table and JWT issuance as
+// email/password auth; email is the join key between the two.
+app.post("/api/auth/google", async (req, res) => {
+  const idToken = req.body?.credential;
+  if (!idToken) return res.status(400).json({ error: "Missing Google credential" });
+
+  let profile;
+  try {
+    profile = await verifyGoogleIdToken(idToken);
+  } catch (err) {
+    if (err instanceof GoogleAuthNotConfiguredError) {
+      return res.status(503).json({ error: err.message });
+    }
+    return res.status(401).json({ error: "Invalid Google credential" });
+  }
+
+  if (!profile.email || !profile.emailVerified) {
+    return res.status(401).json({ error: "Google account has no verified email" });
+  }
+
+  let user = await prisma.user.findUnique({ where: { email: profile.email } });
+  if (!user) {
+    // No password will ever be set for a Google-only account — this hash
+    // is unusable (a random value, not derived from anything guessable)
+    // and only exists because passwordHash is a required column.
+    const passwordHash = await bcrypt.hash(randomUUID(), 10);
+    user = await prisma.user.create({
+      data: {
+        name: profile.name,
+        email: profile.email,
+        passwordHash,
+        avatarUrl: profile.avatarUrl,
+        emailVerified: true,
+        wallet: { create: { balance: 0 } },
+      },
+    });
+  } else if (!user.emailVerified || (!user.avatarUrl && profile.avatarUrl)) {
+    user = await prisma.user.update({
+      where: { id: user.id },
+      data: { emailVerified: true, avatarUrl: user.avatarUrl || profile.avatarUrl },
+    });
   }
 
   const token = signToken(user);

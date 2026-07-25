@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api } from "./api";
+import GoogleSignInButton from "./GoogleSignInButton";
 
 export default function AuthScreen({ onAuthenticated }) {
   const [mode, setMode] = useState("login");
@@ -103,7 +104,9 @@ export default function AuthScreen({ onAuthenticated }) {
           </button>
         </form>
 
-        <p style={{ marginTop: "20px", fontSize: "13px", textAlign: "center", color: "var(--text-secondary)" }}>
+        <GoogleSignInButton onAuthenticated={onAuthenticated} onError={setError} />
+
+        <p style={{ marginTop: "8px", fontSize: "13px", textAlign: "center", color: "var(--text-secondary)" }}>
           {mode === "login" ? "New to CampusVerse?" : "Already have an account?"}{" "}
           <button
             type="button"
