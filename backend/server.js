@@ -1,5 +1,10 @@
 import "dotenv/config";
 import express from "express";
+// Patches Express's router so a rejected promise in an async route handler
+// is forwarded to the error-handling middleware below instead of silently
+// hanging the request until the platform timeout — Express 4 doesn't do
+// this on its own, and not every route here wraps its own try/catch.
+import "express-async-errors";
 import cors from "cors";
 import helmet from "helmet";
 import bcrypt from "bcryptjs";
@@ -814,6 +819,13 @@ const mockDirectory = [
 
 app.get("/api/services", (req, res) => res.json(mockServices));
 app.get("/api/directory", (req, res) => res.json(mockDirectory));
+
+// Catches anything that reaches here — including async rejections forwarded
+// by express-async-errors — so a bug always returns a fast, clean JSON 500
+// instead of hanging the request until the platform timeout.
+app.use((err, req, res, next) => {
+  handleError(res, err);
+});
 
 // Vercel invokes the exported app as a request handler directly — it must
 // not also try to bind a TCP port. `VERCEL` is set automatically in that
