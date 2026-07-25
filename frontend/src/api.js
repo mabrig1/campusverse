@@ -24,6 +24,7 @@ async function request(path, options = {}) {
 export const api = {
   register: (payload) => request("/auth/register", { method: "POST", body: JSON.stringify(payload) }),
   login: (payload) => request("/auth/login", { method: "POST", body: JSON.stringify(payload) }),
+  loginWithGoogle: (credential) => request("/auth/google", { method: "POST", body: JSON.stringify({ credential }) }),
   me: () => request("/me"),
 
   getProducts: (params = {}) => {
