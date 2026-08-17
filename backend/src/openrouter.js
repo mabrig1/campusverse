@@ -12,11 +12,14 @@ const requestSchema = z.object({
 
 const DEFAULT_SYSTEM_PROMPT = `You are CampusVerse AI, a helpful assistant for a Nigerian university campus marketplace and services platform. Help users with campus services, gadgets, phone accessories, printing, legitimate academic support, referrals, orders, and productivity. Be concise, practical, safe, and honest. Never invent prices, order status, payments, commissions, or verification results. For academic work, support learning and legitimate assistance rather than facilitating cheating or impersonation.`;
 
+// Experiment mode: use only OpenRouter's free router unless explicitly changed later.
 const DEFAULT_MODEL = "openrouter/free";
-const DEFAULT_MAX_TOKENS = 800;
-const REQUEST_TIMEOUT_MS = 30000;
+const DEFAULT_MAX_TOKENS = 600;
+const REQUEST_TIMEOUT_MS = 20000;
+const FREE_ONLY = String(process.env.OPENROUTER_FREE_ONLY ?? "true").toLowerCase() !== "false";
 
 function getAllowedModels() {
+  if (FREE_ONLY) return ["openrouter/free"];
   return String(process.env.OPENROUTER_ALLOWED_MODELS || DEFAULT_MODEL)
     .split(",")
     .map((value) => value.trim())
@@ -25,6 +28,7 @@ function getAllowedModels() {
 
 function chooseModel(requestedModel) {
   const allowed = getAllowedModels();
+  if (FREE_ONLY) return DEFAULT_MODEL;
   const configured = String(process.env.OPENROUTER_MODEL || DEFAULT_MODEL).trim();
   const candidate = requestedModel || configured;
   return allowed.includes(candidate) ? candidate : (allowed.includes(configured) ? configured : allowed[0]);
@@ -68,7 +72,7 @@ export async function openRouterChat(payload) {
         model,
         messages,
         temperature: parsed.data.temperature ?? 0.3,
-        max_tokens: parsed.data.maxTokens ?? Number(process.env.OPENROUTER_MAX_TOKENS || DEFAULT_MAX_TOKENS),
+        max_tokens: Math.min(parsed.data.maxTokens ?? Number(process.env.OPENROUTER_MAX_TOKENS || DEFAULT_MAX_TOKENS), DEFAULT_MAX_TOKENS),
       }),
     });
 
@@ -106,9 +110,10 @@ export function getOpenRouterStatus() {
   const allowedModels = getAllowedModels();
   return {
     configured,
+    freeOnly: FREE_ONLY,
     model: chooseModel(),
     allowedModels,
-    maxTokens: Number(process.env.OPENROUTER_MAX_TOKENS || DEFAULT_MAX_TOKENS),
+    maxTokens: Math.min(Number(process.env.OPENROUTER_MAX_TOKENS || DEFAULT_MAX_TOKENS), DEFAULT_MAX_TOKENS),
     timeoutMs: REQUEST_TIMEOUT_MS,
   };
 }
