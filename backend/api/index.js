@@ -1,11 +1,12 @@
 // Vercel's Node.js runtime treats this file's default export as the request
-// handler for every path matched by vercel.json's rewrite. An Express app is
-// itself a valid (req, res) handler, so exporting it directly is enough.
+// handler for every path matched by vercel.json's rewrite.
 import app from "../server.js";
 import { registerReferralRoutes } from "../src/referral-routes.js";
+import { registerAdminAuthRoutes } from "../src/admin-auth-routes.js";
 
-// Referral/admin routes are registered here so the existing backend/server.js
-// can remain the shared local development entrypoint.
+// Referral/admin operations and the dedicated Admin Portal authentication
+// are registered here for the Vercel serverless deployment.
 registerReferralRoutes(app);
+registerAdminAuthRoutes(app);
 
 export default app;
