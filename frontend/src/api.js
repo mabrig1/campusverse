@@ -6,10 +6,11 @@ export function setAuthToken(token) {
 }
 
 async function request(path, options = {}) {
+  const isBinary = options.body instanceof Blob || options.body instanceof ArrayBuffer;
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
-      "Content-Type": "application/json",
+      ...(isBinary ? {} : { "Content-Type": "application/json" }),
       ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
       ...options.headers,
     },
@@ -64,4 +65,22 @@ export const api = {
   verifyNin: (nin) => request("/verify/nin", { method: "POST", body: JSON.stringify({ nin }) }),
   verifyBvn: (bvn) => request("/verify/bvn", { method: "POST", body: JSON.stringify({ bvn }) }),
   verifyImei: (imei) => request("/verify/imei", { method: "POST", body: JSON.stringify({ imei }) }),
+
+  // CampusVerse Earn While You Learn / admin operations
+  getReferralDashboard: () => request("/referrals/me"),
+  attachReferral: (code) => request("/referrals/attach", { method: "POST", body: JSON.stringify({ code }) }),
+  getAdminOverview: () => request("/referrals/admin/overview"),
+  getAdminReferrals: () => request("/referrals/admin/referrals"),
+  addReferralConversion: (payload) => request("/referrals/admin/conversions", { method: "POST", body: JSON.stringify(payload) }),
+  updateReferralCommission: (id, status) => request(`/referrals/admin/commissions/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }),
+  getAdminImages: () => request("/referrals/admin/images"),
+  uploadAdminImage: (file) => request("/referrals/admin/images", {
+    method: "POST",
+    body: file,
+    headers: {
+      "Content-Type": "application/octet-stream",
+      "X-File-Type": file.type,
+      "X-File-Name": file.name,
+    },
+  }),
 };
