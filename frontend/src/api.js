@@ -29,6 +29,17 @@ export const api = {
   adminForgotPassword: (username) => request("/admin/auth/forgot-password", { method: "POST", body: JSON.stringify({ username }) }),
   adminResetPassword: (token, password) => request("/admin/auth/reset-password", { method: "POST", body: JSON.stringify({ token, password }) }),
 
+  // OpenRouter-backed AI. The API key never reaches the browser; the backend
+  // keeps OPENROUTER_API_KEY in its server-side environment.
+  aiChat: (messages, options = {}) => request("/ai/chat", {
+    method: "POST",
+    body: JSON.stringify({ messages, ...options }),
+  }),
+  adminAiChat: (messages, options = {}) => request("/admin/ai/chat", {
+    method: "POST",
+    body: JSON.stringify({ messages, ...options }),
+  }),
+
   getProducts: (params = {}) => {
     const qs = new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== ""))).toString();
     return request(`/products${qs ? `?${qs}` : ""}`);
