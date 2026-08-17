@@ -1,9 +1,7 @@
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 let authToken = null;
-export function setAuthToken(token) {
-  authToken = token;
-}
+export function setAuthToken(token) { authToken = token; }
 
 async function request(path, options = {}) {
   const isBinary = options.body instanceof Blob || options.body instanceof ArrayBuffer;
@@ -26,17 +24,13 @@ export const api = {
   loginWithGoogle: (credential) => request("/auth/google", { method: "POST", body: JSON.stringify({ credential }) }),
   me: () => request("/me"),
 
-  // Dedicated administrator authentication. Admin tokens are short-lived,
-  // scoped on the server, and rejected if the account is no longer ADMIN.
   adminLogin: (payload) => request("/admin/auth/login", { method: "POST", body: JSON.stringify(payload) }),
   adminMe: () => request("/admin/auth/me"),
   adminForgotPassword: (username) => request("/admin/auth/forgot-password", { method: "POST", body: JSON.stringify({ username }) }),
   adminResetPassword: (token, password) => request("/admin/auth/reset-password", { method: "POST", body: JSON.stringify({ token, password }) }),
 
   getProducts: (params = {}) => {
-    const qs = new URLSearchParams(
-      Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== ""))
-    ).toString();
+    const qs = new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== ""))).toString();
     return request(`/products${qs ? `?${qs}` : ""}`);
   },
   getProduct: (id) => request(`/products/${id}`),
@@ -59,9 +53,9 @@ export const api = {
   escrowAction: (id, action) => request(`/escrow/${id}/action`, { method: "POST", body: JSON.stringify({ action }) }),
   verifyStudentId: (regNo) => request("/verify/student-id", { method: "POST", body: JSON.stringify({ regNo }) }),
   verifySelfie: () => request("/verify/selfie", { method: "POST", body: JSON.stringify({ selfieBase64: "mock_base64_data" }) }),
-  verifyNin: (nin) => request("/verify/nin", { method: "POST", body: JSON.stringify({ nin })),
-  verifyBvn: (bvn) => request("/verify/bvn", { method: "POST", body: JSON.stringify({ bvn })),
-  verifyImei: (imei) => request("/verify/imei", { method: "POST", body: JSON.stringify({ imei })),
+  verifyNin: (nin) => request("/verify/nin", { method: "POST", body: JSON.stringify({ nin }) }),
+  verifyBvn: (bvn) => request("/verify/bvn", { method: "POST", body: JSON.stringify({ bvn }) }),
+  verifyImei: (imei) => request("/verify/imei", { method: "POST", body: JSON.stringify({ imei }) }),
 
   getReferralDashboard: () => request("/referrals/me"),
   attachReferral: (code) => request("/referrals/attach", { method: "POST", body: JSON.stringify({ code }) }),
@@ -70,9 +64,5 @@ export const api = {
   addReferralConversion: (payload) => request("/referrals/admin/conversions", { method: "POST", body: JSON.stringify(payload) }),
   updateReferralCommission: (id, status) => request(`/referrals/admin/commissions/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }),
   getAdminImages: () => request("/referrals/admin/images"),
-  uploadAdminImage: (file) => request("/referrals/admin/images", {
-    method: "POST",
-    body: file,
-    headers: { "Content-Type": "application/octet-stream", "X-File-Type": file.type, "X-File-Name": file.name },
-  }),
+  uploadAdminImage: (file) => request("/referrals/admin/images", { method: "POST", body: file, headers: { "Content-Type": "application/octet-stream", "X-File-Type": file.type, "X-File-Name": file.name } }),
 };
