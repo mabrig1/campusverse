@@ -4,13 +4,31 @@ const requestSchema = z.object({
   messages: z.array(z.object({
     role: z.enum(["system", "user", "assistant"]),
     content: z.string().min(1).max(12000),
-  })).min(1).max(30),
+  })).min(1).max(20),
   model: z.string().min(1).max(160).optional(),
   temperature: z.number().min(0).max(2).optional(),
-  maxTokens: z.number().int().min(1).max(4000).optional(),
+  maxTokens: z.number().int().min(1).max(2500).optional(),
 });
 
-const DEFAULT_SYSTEM_PROMPT = `You are CampusVerse AI, a helpful assistant for a Nigerian university campus marketplace and services platform. Help users with campus services, gadgets, phone accessories, printing, legitimate academic support, referrals, orders, and general productivity. Be concise, practical, safe, and honest. Never invent prices, order status, payments, commissions, or verification results. For academic work, support learning and legitimate assistance rather than facilitating cheating or impersonation.`;
+const DEFAULT_SYSTEM_PROMPT = `You are CampusVerse AI, a helpful assistant for a Nigerian university campus marketplace and services platform. Help users with campus services, gadgets, phone accessories, printing, legitimate academic support, referrals, orders, and productivity. Be concise, practical, safe, and honest. Never invent prices, order status, payments, commissions, or verification results. For academic work, support learning and legitimate assistance rather than facilitating cheating or impersonation.`;
+
+const DEFAULT_MODEL = "openrouter/free";
+const DEFAULT_MAX_TOKENS = 800;
+const REQUEST_TIMEOUT_MS = 30000;
+
+function getAllowedModels() {
+  return String(process.env.OPENROUTER_ALLOWED_MODELS || DEFAULT_MODEL)
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+function chooseModel(requestedModel) {
+  const allowed = getAllowedModels();
+  const configured = String(process.env.OPENROUTER_MODEL || DEFAULT_MODEL).trim();
+  const candidate = requestedModel || configured;
+  return allowed.includes(candidate) ? candidate : (allowed.includes(configured) ? configured : allowed[0]);
+}
 
 export async function openRouterChat(payload) {
   const apiKey = String(process.env.OPENROUTER_API_KEY || "").trim();
@@ -27,47 +45,70 @@ export async function openRouterChat(payload) {
     throw error;
   }
 
-  const model = parsed.data.model || process.env.OPENROUTER_MODEL || "openrouter/free";
+  const model = chooseModel(parsed.data.model);
   const messages = [
     { role: "system", content: process.env.OPENROUTER_SYSTEM_PROMPT || DEFAULT_SYSTEM_PROMPT },
     ...parsed.data.messages,
   ];
 
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      ...(process.env.PUBLIC_APP_URL ? { "HTTP-Referer": process.env.PUBLIC_APP_URL } : {}),
-      "X-Title": "CampusVerse",
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature: parsed.data.temperature ?? 0.4,
-      max_tokens: parsed.data.maxTokens ?? 1200,
-    }),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const message = data?.error?.message || `OpenRouter request failed (${response.status})`;
-    const error = new Error(message);
-    error.code = "OPENROUTER_UPSTREAM_ERROR";
-    error.status = response.status;
-    throw error;
+  try {
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        ...(process.env.PUBLIC_APP_URL ? { "HTTP-Referer": process.env.PUBLIC_APP_URL } : {}),
+        "X-Title": "CampusVerse",
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature: parsed.data.temperature ?? 0.3,
+        max_tokens: parsed.data.maxTokens ?? Number(process.env.OPENROUTER_MAX_TOKENS || DEFAULT_MAX_TOKENS),
+      }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const message = data?.error?.message || `OpenRouter request failed (${response.status})`;
+      const error = new Error(message);
+      error.code = "OPENROUTER_UPSTREAM_ERROR";
+      error.status = response.status;
+      throw error;
+    }
+
+    const content = data?.choices?.[0]?.message?.content;
+    if (!content) {
+      const error = new Error("OpenRouter returned an empty response");
+      error.code = "OPENROUTER_EMPTY_RESPONSE";
+      throw error;
+    }
+
+    return { content, model: data.model || model, usage: data.usage || null };
+  } catch (err) {
+    if (err?.name === "AbortError") {
+      const error = new Error("AI request timed out. Please try again.");
+      error.code = "OPENROUTER_TIMEOUT";
+      throw error;
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
   }
+}
 
-  const content = data?.choices?.[0]?.message?.content;
-  if (!content) {
-    const error = new Error("OpenRouter returned an empty response");
-    error.code = "OPENROUTER_EMPTY_RESPONSE";
-    throw error;
-  }
-
+export function getOpenRouterStatus() {
+  const configured = Boolean(String(process.env.OPENROUTER_API_KEY || "").trim());
+  const allowedModels = getAllowedModels();
   return {
-    content,
-    model: data.model || model,
-    usage: data.usage || null,
+    configured,
+    model: chooseModel(),
+    allowedModels,
+    maxTokens: Number(process.env.OPENROUTER_MAX_TOKENS || DEFAULT_MAX_TOKENS),
+    timeoutMs: REQUEST_TIMEOUT_MS,
   };
 }
