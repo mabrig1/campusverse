@@ -2,15 +2,10 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// Postgres (Supabase) — required for the Vercel serverless deployment,
-// which has no persistent disk for SQLite and runs multiple function
-// instances that all need to share one database.
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
-
-// ---------- Identity, trust & KYC ----------
 
 enum Role {
   STUDENT
@@ -21,6 +16,7 @@ model User {
   id        String   @id @default(cuid())
   name      String
   email     String   @unique
+  username  String?  @unique
   passwordHash String
   role      Role     @default(STUDENT)
   regNo     String?
@@ -29,8 +25,6 @@ model User {
   avatarUrl String?
   createdAt DateTime @default(now())
 
-  // Trust & KYC telemetry (mirrors the existing /api/trust-score inputs) —
-  // persisted per-user instead of living only in frontend React state.
   phoneVerified     Boolean @default(false)
   emailVerified     Boolean @default(false)
   studentIdVerified Boolean @default(false)
@@ -42,16 +36,12 @@ model User {
   wallet   Wallet?
   products Product[]
   reviews  Review[]
-
   escrowsAsBuyer  EscrowTransaction[] @relation("Buyer")
   escrowsAsSeller EscrowTransaction[] @relation("Seller")
-
   favorites  Favorite[]
   reports    Report[]
   promotions Promotion[]
 }
-
-// ---------- Wallet (ported from CampusHub's atomic-charge pattern) ----------
 
 model Wallet {
   id           String        @id @default(cuid())
@@ -79,43 +69,24 @@ model Transaction {
   amount    Float
   note      String
   createdAt DateTime        @default(now())
-
   @@index([walletId])
 }
 
-// ---------- Marketplace (peer-to-peer, not storefront — CampusVerse's own shape) ----------
-
-enum ConditionType {
-  NEW
-  USED
-}
-
-enum PromotionTier {
-  NONE
-  PINNED
-  HIGHLIGHTED
-  FEATURED
-}
+enum ConditionType { NEW USED }
+enum PromotionTier { NONE PINNED HIGHLIGHTED FEATURED }
 
 model Product {
   id                   String        @id @default(cuid())
   title                String
   description          String
   price                Float
-  // Validated against the shared category config (backend/src/campus-config.js)
-  // rather than a fixed DB enum, so the list can grow without a migration.
   category             String
-  conditionType         ConditionType @default(USED)
-  // Free-text condition detail (e.g. "Like new", "Minor scratch") shown
-  // alongside the strict New/Used badge — kept separate from conditionType.
+  conditionType        ConditionType @default(USED)
   condition            String
-  // Validated against the shared campus-location config, same reasoning as category.
   location             String
-  // JSON-encoded array of image URLs — first is the cover image.
   imagesJson           String
   stock                Int           @default(1)
   inspectionRequired   Boolean       @default(false)
-  // JSON-encoded inspection certificate (imei, serialNumber, batteryHealth, ...)
   inspectionReportJson String?
   viewCount            Int           @default(0)
   promotionTier        PromotionTier @default(NONE)
@@ -123,13 +94,11 @@ model Product {
   seller               User          @relation(fields: [sellerId], references: [id])
   sellerId             String
   createdAt            DateTime      @default(now())
-
   reviews     Review[]
   escrows     EscrowTransaction[] @relation("ProductEscrows")
   favoritedBy Favorite[]
   reports     Report[]
   promotions  Promotion[]
-
   @@index([sellerId])
   @@index([category])
   @@index([location])
@@ -143,7 +112,6 @@ model Favorite {
   product   Product  @relation(fields: [productId], references: [id])
   productId String
   createdAt DateTime @default(now())
-
   @@unique([userId, productId])
   @@index([productId])
 }
@@ -155,16 +123,12 @@ model Report {
   product   Product  @relation(fields: [productId], references: [id])
   productId String
   reason    String
-  status    String   @default("pending") // pending -> reviewed -> dismissed (admin moderation is a follow-up pass)
+  status    String   @default("pending")
   createdAt DateTime @default(now())
-
   @@index([productId])
   @@index([status])
 }
 
-// Payment is simulated — no live Paystack/Flutterwave/Monnify call. This
-// records promotion "purchases" in the shape a real gateway integration
-// would need (provider/reference columns ready, unused until wired up).
 model Promotion {
   id            String        @id @default(cuid())
   product       Product       @relation(fields: [productId], references: [id])
@@ -178,7 +142,6 @@ model Promotion {
   paymentStatus String        @default("PAID")
   purchasedAt   DateTime      @default(now())
   expiresAt     DateTime
-
   @@index([productId])
   @@index([buyerId])
 }
@@ -192,19 +155,10 @@ model Review {
   product   Product  @relation(fields: [productId], references: [id])
   productId String
   createdAt DateTime @default(now())
-
   @@index([productId])
 }
 
-// ---------- Escrow engine (CampusVerse's distinguishing feature) ----------
-
-enum EscrowStatus {
-  FUNDS_LOCKED
-  INSPECTED
-  FUNDS_RELEASED
-  DISPUTED
-  REFUNDED
-}
+enum EscrowStatus { FUNDS_LOCKED INSPECTED FUNDS_RELEASED DISPUTED REFUNDED }
 
 model EscrowTransaction {
   id                String       @id @default(cuid())
@@ -213,7 +167,7 @@ model EscrowTransaction {
   buyer             User         @relation("Buyer", fields: [buyerId], references: [id])
   buyerId           String
   seller            User         @relation("Seller", fields: [sellerId], references: [id])
-  sellerId          String
+  sellerId           String
   price             Float
   status            EscrowStatus @default(FUNDS_LOCKED)
   inspectionStatus  String       @default("pending")
@@ -221,7 +175,6 @@ model EscrowTransaction {
   disputeStatus     String       @default("none")
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
-
   @@index([productId])
   @@index([buyerId])
   @@index([sellerId])
