@@ -16,9 +16,7 @@ async function request(path, options = {}) {
     },
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(data.error || data.message || "Request failed");
-  }
+  if (!res.ok) throw new Error(data.error || data.message || "Request failed");
   return data;
 }
 
@@ -28,6 +26,13 @@ export const api = {
   loginWithGoogle: (credential) => request("/auth/google", { method: "POST", body: JSON.stringify({ credential }) }),
   me: () => request("/me"),
 
+  // Dedicated administrator authentication. Admin tokens are short-lived,
+  // scoped on the server, and rejected if the account is no longer ADMIN.
+  adminLogin: (payload) => request("/admin/auth/login", { method: "POST", body: JSON.stringify(payload) }),
+  adminMe: () => request("/admin/auth/me"),
+  adminForgotPassword: (username) => request("/admin/auth/forgot-password", { method: "POST", body: JSON.stringify({ username }) }),
+  adminResetPassword: (token, password) => request("/admin/auth/reset-password", { method: "POST", body: JSON.stringify({ token, password }) }),
+
   getProducts: (params = {}) => {
     const qs = new URLSearchParams(
       Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== ""))
@@ -36,37 +41,28 @@ export const api = {
   },
   getProduct: (id) => request(`/products/${id}`),
   createProduct: (payload) => request("/products", { method: "POST", body: JSON.stringify(payload) }),
-  promoteProduct: (id, tier, days) =>
-    request(`/products/${id}/promote`, { method: "POST", body: JSON.stringify({ tier, days }) }),
-  reportProduct: (id, reason) =>
-    request(`/products/${id}/report`, { method: "POST", body: JSON.stringify({ reason }) }),
-
+  promoteProduct: (id, tier, days) => request(`/products/${id}/promote`, { method: "POST", body: JSON.stringify({ tier, days }) }),
+  reportProduct: (id, reason) => request(`/products/${id}/report`, { method: "POST", body: JSON.stringify({ reason }) }),
   getFavorites: () => request("/favorites"),
   addFavorite: (productId) => request(`/favorites/${productId}`, { method: "POST" }),
   removeFavorite: (productId) => request(`/favorites/${productId}`, { method: "DELETE" }),
-
   getCampusLocations: () => request("/campus-locations"),
   getMarketplaceCategories: () => request("/marketplace-categories"),
   getPromotionPricing: () => request("/promotion-pricing"),
   getReportReasons: () => request("/report-reasons"),
-
   getServices: () => request("/services"),
   getDirectory: () => request("/directory"),
-
   getWallet: () => request("/wallet"),
   topUp: (amount) => request("/wallet/topup", { method: "POST", body: JSON.stringify({ amount }) }),
   transfer: (payload) => request("/wallet/transfer", { method: "POST", body: JSON.stringify(payload) }),
-
   startEscrow: (productId) => request("/escrow", { method: "POST", body: JSON.stringify({ productId }) }),
   escrowAction: (id, action) => request(`/escrow/${id}/action`, { method: "POST", body: JSON.stringify({ action }) }),
-
   verifyStudentId: (regNo) => request("/verify/student-id", { method: "POST", body: JSON.stringify({ regNo }) }),
   verifySelfie: () => request("/verify/selfie", { method: "POST", body: JSON.stringify({ selfieBase64: "mock_base64_data" }) }),
-  verifyNin: (nin) => request("/verify/nin", { method: "POST", body: JSON.stringify({ nin }) }),
-  verifyBvn: (bvn) => request("/verify/bvn", { method: "POST", body: JSON.stringify({ bvn }) }),
-  verifyImei: (imei) => request("/verify/imei", { method: "POST", body: JSON.stringify({ imei }) }),
+  verifyNin: (nin) => request("/verify/nin", { method: "POST", body: JSON.stringify({ nin })),
+  verifyBvn: (bvn) => request("/verify/bvn", { method: "POST", body: JSON.stringify({ bvn })),
+  verifyImei: (imei) => request("/verify/imei", { method: "POST", body: JSON.stringify({ imei })),
 
-  // CampusVerse Earn While You Learn / admin operations
   getReferralDashboard: () => request("/referrals/me"),
   attachReferral: (code) => request("/referrals/attach", { method: "POST", body: JSON.stringify({ code }) }),
   getAdminOverview: () => request("/referrals/admin/overview"),
@@ -77,10 +73,6 @@ export const api = {
   uploadAdminImage: (file) => request("/referrals/admin/images", {
     method: "POST",
     body: file,
-    headers: {
-      "Content-Type": "application/octet-stream",
-      "X-File-Type": file.type,
-      "X-File-Name": file.name,
-    },
+    headers: { "Content-Type": "application/octet-stream", "X-File-Type": file.type, "X-File-Name": file.name },
   }),
 };
