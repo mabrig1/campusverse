@@ -3,7 +3,9 @@ import { createRoot } from 'react-dom/client'
 import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/react'
 import './index.css'
+import './EarnWhileYouLearn.css'
 import App from './App.jsx'
+import EarnWhileYouLearnLauncher from './EarnWhileYouLearnLauncher.jsx'
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -16,6 +18,7 @@ if ('serviceWorker' in navigator) {
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <App />
+    <EarnWhileYouLearnLauncher />
     <Analytics />
     <SpeedInsights />
   </StrictMode>,
