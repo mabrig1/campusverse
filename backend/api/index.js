@@ -3,10 +3,12 @@
 import app from "../server.js";
 import { registerReferralRoutes } from "../src/referral-routes.js";
 import { registerAdminAuthRoutes } from "../src/admin-auth-routes.js";
+import { registerAIRoutes } from "../src/ai-routes.js";
 
-// Referral/admin operations and the dedicated Admin Portal authentication
-// are registered here for the Vercel serverless deployment.
+// Referral/admin operations, Admin Portal authentication, and authenticated
+// OpenRouter AI routes are registered here for the Vercel serverless deployment.
 registerReferralRoutes(app);
 registerAdminAuthRoutes(app);
+registerAIRoutes(app);
 
 export default app;
