@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import AdminAuthScreen from "./AdminAuthScreen";
+import AdminAI from "./AdminAI";
 import { api, setAuthToken } from "./api";
 
 const money = (n) => `₦${Number(n || 0).toLocaleString()}`;
@@ -57,7 +58,6 @@ export default function AdminDashboard() {
       .then((u) => { setUser(u); return u; })
       .then(() => load())
       .catch(() => logout());
-    // token is intentionally the only dependency; load uses the authenticated token.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
@@ -99,33 +99,35 @@ export default function AdminDashboard() {
     finally { setBusy(false); }
   };
 
-  const setCommission = async (id, status) => {
-    try { await api.updateReferralCommission(id, status); toast(`Commission ${status.toLowerCase()}`); load(); }
-    catch (e) { toast(e.message); }
-  };
-
   if (!token || !user) return <AdminAuthScreen onAuthenticated={auth} />;
 
   return (
     <div style={{ minHeight: "100vh", background: "#f4f8f6", color: "#10201b", fontFamily: "Inter,system-ui,sans-serif" }}>
       {message && <div style={{ position: "fixed", top: 18, right: 18, zIndex: 50, background: "#063f31", color: "#fff", padding: "12px 16px", borderRadius: 12 }}>{message}</div>}
       <header style={{ background: "#063f31", color: "#fff", padding: "18px 5vw", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div><b style={{ fontSize: 21 }}>CampusVerse Admin</b><div style={{ fontSize: 11, color: "#9ed5c4" }}>Marketplace • Referrals • Images • Operations</div></div>
+        <div><b style={{ fontSize: 21 }}>CampusVerse Admin</b><div style={{ fontSize: 11, color: "#9ed5c4" }}>Marketplace • Referrals • Images • Operations • AI</div></div>
         <div><span style={{ fontSize: 12, marginRight: 12 }}>{user.name} • ADMIN</span><button style={{ ...btn, background: "#61e7b5", color: "#063f31" }} onClick={logout}>Sign out</button></div>
       </header>
       <main style={{ maxWidth: 1250, margin: "0 auto", padding: "28px 5vw 70px" }}>
         <nav style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
-          {[['overview','Overview'],['products','Products'],['images','Image Library'],['referrals','Referrals'],['conversion','Record Conversion']].map(([k,l]) => <button key={k} onClick={() => setTab(k)} style={{ ...btn, background: tab === k ? "#07966c" : "#fff", color: tab === k ? "#fff" : "#34584d", border: "1px solid #d6e5df" }}>{l}</button>)}
+          {[['overview','Overview'],['products','Products'],['images','Image Library'],['referrals','Referrals'],['conversion','Record Conversion'],['ai','CampusVerse AI']].map(([k,l]) => <button key={k} onClick={() => setTab(k)} style={{ ...btn, background: tab === k ? "#07966c" : "#fff", color: tab === k ? "#fff" : "#34584d", border: "1px solid #d6e5df" }}>{l}</button>)}
         </nav>
+
         {overview && tab === "overview" && <>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 14 }}>
             {[["Users", overview.users, "👥"], ["Products", overview.products, "📦"], ["Referrals", overview.referrals, "🔗"], ["Commission value", money(overview.commissions), "💰"], ["Pending payouts", overview.pendingCommissions, "⏳"]].map(([a,b,c]) => <div style={box} key={a}><div style={{ fontSize: 23 }}>{c}</div><span style={{ fontSize: 12, color: "#6c827b" }}>{a}</span><strong style={{ display: "block", fontSize: 27 }}>{b}</strong></div>)}
           </div>
-          <div style={{ ...box, marginTop: 18 }}><h2 style={{ marginTop: 0 }}>Operations control</h2><p style={{ color: "#617870", lineHeight: 1.6 }}>Use Products to publish gadgets and accessories, Image Library to upload product photos, Referrals to verify partner activity, and Record Conversion to create a commission only after a qualifying order has been confirmed.</p></div>
+          <div style={{ ...box, marginTop: 18 }}><h2 style={{ marginTop: 0 }}>Operations control</h2><p style={{ color: "#617870", lineHeight: 1.6 }}>Use Products to publish gadgets and accessories, Image Library to upload product photos, Referrals to verify partner activity, Record Conversion to create a commission only after a qualifying order is confirmed, and CampusVerse AI for operational assistance.</p></div>
         </>}
+
+        {tab === "ai" && <AdminAI />}
+
         {tab === "products" && <div style={box}><h2 style={{ marginTop: 0 }}>Publish gadget / accessory</h2><div style={{ display: "grid", gap: 10, maxWidth: 800 }}>{["title","description","price","category","condition","location"].map(k => <input key={k} placeholder={k} value={product[k]} onChange={e => setProduct({ ...product, [k]: e.target.value })} style={input} />)}</div><div style={{ marginTop: 14 }}><label style={{ ...btn, background: "#e5f6ef", display: "inline-block" }}>📷 Upload product image<input type="file" accept="image/*" onChange={upload} hidden /></label><div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>{product.images.map((u) => <img key={u} src={u} alt="product" style={{ width: 90, height: 90, objectFit: "cover", borderRadius: 10 }} />)}</div></div><button disabled={busy} style={{ ...btn, background: "#07966c", color: "#fff", marginTop: 18 }} onClick={publish}>{busy ? "Working…" : "Publish product"}</button></div>}
+
         {tab === "images" && <div style={box}><h2 style={{ marginTop: 0 }}>CampusVerse Image Library</h2><p style={{ color: "#6c827b" }}>Images uploaded here are stored through the configured Supabase Storage bucket and can be reused on listings.</p><label style={{ ...btn, background: "#07966c", color: "#fff", display: "inline-block" }}>Upload image<input type="file" accept="image/*" onChange={upload} hidden /></label><div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))", gap: 14, marginTop: 20 }}>{images.map(x => <div key={x.id} style={{ border: "1px solid #e0ebe6", borderRadius: 12, padding: 8 }}><img src={x.url} alt={x.file_name} style={{ width: "100%", height: 130, objectFit: "cover", borderRadius: 8 }} /><small style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 6 }}>{x.file_name}</small></div>)}</div></div>}
+
         {tab === "referrals" && <div style={box}><h2 style={{ marginTop: 0 }}>Referral management</h2><div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}><thead><tr>{["Partner","Customer","Code","Status","Commission","Date"].map(x => <th style={th} key={x}>{x}</th>)}</tr></thead><tbody>{refs.map(r => <tr key={r.id}><td style={td}><b>{r.referrer_name}</b><small style={{ display: "block" }}>{r.referrer_email}</small></td><td style={td}>{r.referred_name}</td><td style={td}>{r.code}</td><td style={td}>{r.status}</td><td style={td}>{money(r.commission_total)}</td><td style={td}>{new Date(r.created_at).toLocaleDateString()}</td></tr>)}</tbody></table></div></div>}
+
         {tab === "conversion" && <div style={box}><h2 style={{ marginTop: 0 }}>Record a qualifying conversion</h2><p style={{ color: "#6c827b" }}>Admin confirms the order value; CampusVerse calculates the 20% commission automatically. Partners cannot self-declare commissions.</p><select value={conversion.referralId} onChange={e => setConversion({ ...conversion, referralId: e.target.value })} style={input}><option value="">Select referral</option>{refs.map(r => <option key={r.id} value={r.id}>{r.referrer_name} → {r.referred_name} ({r.code})</option>)}</select><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}><select value={conversion.sourceType} onChange={e => setConversion({ ...conversion, sourceType: e.target.value })} style={input}><option>SERVICE</option><option>PRODUCT</option><option>PRINTING</option><option>OTHER</option></select><input placeholder="Order/reference ID" value={conversion.sourceId} onChange={e => setConversion({ ...conversion, sourceId: e.target.value })} style={input} /><input type="number" placeholder="Order value (₦)" value={conversion.baseAmount} onChange={e => setConversion({ ...conversion, baseAmount: e.target.value })} style={input} /><input placeholder="Admin note" value={conversion.note} onChange={e => setConversion({ ...conversion, note: e.target.value })} style={input} /></div><button disabled={busy} style={{ ...btn, background: "#07966c", color: "#fff", marginTop: 14 }} onClick={addConversion}>Create 20% commission</button></div>}
       </main>
     </div>
