@@ -1,4 +1,6 @@
-const API_BASE = (import.meta.env.VITE_API_URL || "https://api.campusverse.store/api").replace(/\/$/, "");
+// Vercel hosts the backend now; Railway is no longer required.
+// VITE_API_URL can override this in a deployment environment.
+const API_BASE = (import.meta.env.VITE_API_URL || "https://campusverse-backend.vercel.app/api").replace(/\/$/, "");
 
 let authToken = null;
 export function setAuthToken(token) { authToken = token; }
@@ -14,7 +16,7 @@ async function request(path, options = {}) {
     },
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || data.message || "Request failed");
+  if (!res.ok) throw new Error(data.error || data.message || `Request failed (${res.status})`);
   return data;
 }
 
@@ -24,13 +26,15 @@ export const api = {
   loginWithGoogle: (credential) => request("/auth/google", { method: "POST", body: JSON.stringify({ credential }) }),
   me: () => request("/me"),
 
-  adminLogin: (payload) => request("/admin/auth/login", { method: "POST", body: JSON.stringify(payload) }),
-  adminMe: () => request("/admin/auth/me"),
-  adminForgotPassword: (username) => request("/admin/auth/forgot-password", { method: "POST", body: JSON.stringify({ username }) }),
-  adminResetPassword: (token, password) => request("/admin/auth/reset-password", { method: "POST", body: JSON.stringify({ token, password }) }),
+  // New isolated administrator API. It is deliberately separate from the
+  // normal student login token and requires an admin-scoped JWT server-side.
+  adminLogin: (payload) => request("/admin/v2/login", { method: "POST", body: JSON.stringify(payload) }),
+  adminMe: () => request("/admin/v2/me"),
+  adminForgotPassword: (username) => request("/admin/v2/forgot-password", { method: "POST", body: JSON.stringify({ username }) }),
+  adminResetPassword: (token, password) => request("/admin/v2/reset-password", { method: "POST", body: JSON.stringify({ token, password }) }),
+  getAdminOverviewV2: () => request("/admin/v2/overview"),
+  getAdminProductsV2: () => request("/admin/v2/products"),
 
-  // OpenRouter-backed AI. The API key never reaches the browser; the backend
-  // keeps OPENROUTER_API_KEY in its server-side environment.
   aiChat: (messages, options = {}) => request("/ai/chat", {
     method: "POST",
     body: JSON.stringify({ messages, ...options }),
