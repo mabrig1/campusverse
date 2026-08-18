@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const API_BASE = (import.meta.env.VITE_API_URL || "https://api.campusverse.store/api").replace(/\/$/, "");
 
 let authToken = null;
 export function setAuthToken(token) { authToken = token; }
@@ -29,8 +29,6 @@ export const api = {
   adminForgotPassword: (username) => request("/admin/auth/forgot-password", { method: "POST", body: JSON.stringify({ username }) }),
   adminResetPassword: (token, password) => request("/admin/auth/reset-password", { method: "POST", body: JSON.stringify({ token, password }) }),
 
-  // OpenRouter-backed AI. The API key never reaches the browser; the backend
-  // keeps OPENROUTER_API_KEY in its server-side environment.
   aiChat: (messages, options = {}) => request("/ai/chat", {
     method: "POST",
     body: JSON.stringify({ messages, ...options }),
