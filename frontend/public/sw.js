@@ -1,8 +1,8 @@
-// Minimal app-shell service worker: cache-first for this origin's static
-// assets so the app installs and reopens instantly; never touches API
-// calls (those must always hit the network — cached auth/wallet/escrow
-// data would be actively misleading).
-const CACHE_NAME = "campusverse-shell-v1";
+// CampusVerse service worker.
+// Navigation documents are network-first so deployments and admin route
+// changes are not hidden behind an old app-shell cache. Static assets remain
+// cache-first for fast repeat visits; API calls are never intercepted.
+const CACHE_NAME = "campusverse-shell-v2";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -21,6 +21,20 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
   if (event.request.method !== "GET" || url.origin !== self.location.origin || url.pathname.startsWith("/api")) {
+    return;
+  }
+
+  // Always ask the network for HTML/navigation requests first. This prevents
+  // /admin and the storefront from being served from an older deployment.
+  if (event.request.mode === "navigate" || event.request.destination === "document") {
+    event.respondWith(
+      fetch(event.request).then((response) => {
+        if (response.ok) {
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, response.clone()));
+        }
+        return response;
+      }).catch(() => caches.match(event.request).then((cached) => cached || caches.match("/index.html")))
+    );
     return;
   }
 
