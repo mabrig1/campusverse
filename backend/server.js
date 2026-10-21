@@ -283,100 +283,19 @@ app.get("/api/me", requireAuth, async (req, res) => {
 // wired up) but now persist to the authenticated user instead of only
 // existing in frontend React state.
 
-app.post("/api/verify/student-id", requireAuth, async (req, res) => {
-  const regNo = String(req.body?.regNo || "").trim();
-  if (!regNo) return res.status(400).json({ error: "Registration number is required" });
-
-  const user = await prisma.user.update({
-    where: { id: req.userId },
-    data: { studentIdVerified: true, regNo },
-  });
-  res.json({ success: true, message: `UNN Student Record verified: ${regNo.toUpperCase()}`, user: await serializeUser(user) });
+// Verification providers have not been integrated. Never issue a verified badge
+// or claim a stolen-device clearance based on demo data.
+const verificationUnavailable = (_req, res) => res.status(503).json({
+  success: false,
+  error: "Independent identity and device verification are not configured. Do not share NIN, BVN, or identity images here.",
 });
-
-app.post("/api/verify/selfie", requireAuth, async (req, res) => {
-  if (!req.body?.selfieBase64) {
-    return res.status(400).json({ success: false, message: "Selfie image data is required" });
-  }
-  const user = await prisma.user.update({ where: { id: req.userId }, data: { selfieVerified: true } });
-  res.json({
-    success: true,
-    matchConfidence: 98.4,
-    livenessDetected: true,
-    message: "Face match matches student ID photo",
-    user: await serializeUser(user),
-  });
-});
-
-app.post("/api/verify/nin", requireAuth, async (req, res) => {
-  const { nin } = req.body;
-  if (!nin || String(nin).length !== 11) {
-    return res.status(400).json({ success: false, message: "NIN must be exactly 11 digits" });
-  }
-  const user = await prisma.user.update({ where: { id: req.userId }, data: { ninVerified: true } });
-  res.json({
-    success: true,
-    message: "NIN identity matching successful",
-    data: { fullName: user.name.toUpperCase(), stateOfOrigin: "Enugu State" },
-    user: await serializeUser(user),
-  });
-});
-
-app.post("/api/verify/bvn", requireAuth, async (req, res) => {
-  const { bvn } = req.body;
-  if (!bvn || String(bvn).length !== 11) {
-    return res.status(400).json({ success: false, message: "BVN must be exactly 11 digits" });
-  }
-  const user = await prisma.user.update({ where: { id: req.userId }, data: { bvnVerified: true } });
-  res.json({
-    success: true,
-    message: "BVN identity matches biometric record",
-    data: { fullName: user.name.toUpperCase(), bankVerified: "Access Bank PLC" },
-    user: await serializeUser(user),
-  });
-});
-
-const blacklistedIMEIs = ["357289110482937", "861002938172930"];
-
-app.post("/api/verify/imei", (req, res) => {
-  const { imei } = req.body;
-  if (!imei) return res.status(400).json({ success: false, message: "IMEI is required" });
-
-  const isBlacklisted = blacklistedIMEIs.includes(String(imei).trim());
-  res.json({
-    imei,
-    clean: !isBlacklisted,
-    status: isBlacklisted ? "Blacklisted / Reported Stolen" : "Clean",
-    source: isBlacklisted ? "Nigeria Police Force & Campus Security Database" : "Checked globally",
-    carrierLock: "Unlocked",
-  });
-});
-
-app.post("/api/fraud-risk", (req, res) => {
-  const { deviceFingerprint, location } = req.body;
-  let riskScore = 15;
-  const flags = [];
-
-  if (!deviceFingerprint) {
-    riskScore += 20;
-    flags.push("No device identifier");
-  }
-  if (location && !location.toLowerCase().includes("nsukka") && !location.toLowerCase().includes("enugu")) {
-    riskScore += 30;
-    flags.push("Geo-location anomaly: Out of campus region");
-  }
-
-  let riskLevel = "Low";
-  if (riskScore > 30) riskLevel = "Moderate";
-  if (riskScore > 60) riskLevel = "High";
-
-  res.json({
-    riskScore,
-    riskLevel,
-    flags,
-    action: riskLevel === "High" ? "Trigger OTP & Biometric Challenge" : "Approve Transaction",
-  });
-});
+for (const path of ["/api/verify/student-id", "/api/verify/selfie", "/api/verify/nin", "/api/verify/bvn", "/api/verify/imei"]) {
+  app.post(path, requireAuth, verificationUnavailable);
+}
+// The previous heuristic was only a demonstration, not fraud intelligence.
+app.post("/api/fraud-risk", requireAuth, (_req, res) => res.status(503).json({
+  error: "Fraud risk scoring unavailable: verified detection service not configured.",
+}));
 
 // ---------- Wallet ----------
 
