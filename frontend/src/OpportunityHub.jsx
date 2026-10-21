@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { GraduationCap, BookOpen, Laptop, BadgePercent, ArrowUpRight, Search, ShieldAlert, Sparkles } from 'lucide-react';
 import './OpportunityHub.css';
+import MembershipPlans from './MembershipPlans';
 
 const resources = [
   { id:'scholarships',title:'Find scholarships',icon:'🎓',category:'Scholarships',description:'Find scholarships through AfriGrant Pipeline, including funding discovery and matching resources.',links:[{name:'Open AfriGrant Scholarship Engine',url:'https://www.afrigrantpipeline.com/scholarships'},{name:'Browse AfriGrant Funding',url:'https://www.afrigrantpipeline.com/'}],disclaimer:'AfriGrant Pipeline is the linked scholarship engine. Scholarships and deadlines must still be confirmed with the original funding organisation.' },
@@ -16,6 +17,7 @@ export default function OpportunityHub({onMarketplace}) {
    <div className="cv-opp-section-title" id="opportunity-resources"><div><span>YOUR NEXT OPPORTUNITY</span><h3>Choose where to grow</h3></div><label className="cv-opp-search"><Search size={17}/><input placeholder="Search opportunities…" value={query} onChange={e=>setQuery(e.target.value)} aria-label="Search opportunities"/></label></div>
    <div className="cv-opp-grid">{shown.map(item=><article key={item.id} className="cv-opp-card"><span className="cv-opp-icon">{item.icon}</span><small>{item.category}</small><h4>{item.title}</h4><p>{item.description}</p><div className="cv-opp-links">{item.links.map(link=><a key={link.url} href={link.url} target="_blank" rel="noopener noreferrer">{link.name} <ArrowUpRight size={15}/></a>)}</div><p className="cv-opp-disclaimer">{item.disclaimer}</p></article>)}</div>
    {shown.length===0&&<p>No matching resources. Try another search.</p>}
+   <MembershipPlans />
    <div className="cv-opp-deals"><div><span className="cv-opp-label">💻 CAMPUS TECH DEALS</span><h3>Buy gadgets for less</h3><p>Explore pre-owned laptops, phones and accessories offered by students. Compare prices and inspect items before paying.</p><p className="cv-opp-disclaimer"><ShieldAlert size={14}/> “Up to 70% off” is a future promotional goal, not a verified discount currently available on CampusVerse. Any future discount must be calculated from a documented genuine reference price.</p></div><button onClick={onMarketplace} className="cv-opp-btn">Browse gadgets <ArrowUpRight size={16}/></button></div>
  </section>;
 }
