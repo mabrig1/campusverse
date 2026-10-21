@@ -16,6 +16,7 @@ const schema = z.object({
   location: z.string().min(1, "Choose a campus location"),
   images: z.array(z.object({ url: z.string().url("Enter a valid image URL") })).min(1, "Add at least one image"),
   inspectionRequired: z.boolean().optional(),
+  ownershipDeclaration: z.literal(true, { error: "Confirm that you own this item or are authorised to sell it" }),
   promotionTier: z.enum(["NONE", "PINNED", "HIGHLIGHTED", "FEATURED"]),
   promotionDays: z.coerce.number().int().min(1).max(30),
 });
@@ -47,6 +48,7 @@ export default function SellListingForm({ onClose, onCreated, showToast }) {
       location: config?.locations?.[0] || "",
       images: [{ url: "" }],
       inspectionRequired: false,
+      ownershipDeclaration: false,
       promotionTier: "NONE",
       promotionDays: 1,
     },
@@ -79,6 +81,7 @@ export default function SellListingForm({ onClose, onCreated, showToast }) {
         location: values.location,
         images: values.images.map((i) => i.url),
         inspectionRequired: values.inspectionRequired,
+        ownershipDeclaration: values.ownershipDeclaration,
       });
 
       if (values.promotionTier !== "NONE") {
@@ -169,6 +172,11 @@ export default function SellListingForm({ onClose, onCreated, showToast }) {
           Request a CampusVerse Hub inspection (recommended for electronics)
         </label>
 
+        <div style={{padding:12,border:"1px solid rgba(245,158,11,.35)",borderRadius:10}}>
+          <label style={{display:"flex",gap:10,alignItems:"start",fontSize:13,lineHeight:1.5}}><input type="checkbox" {...register("ownershipDeclaration")} />I confirm this item belongs to me or I have the owner’s permission to sell it. I understand that suspected stolen property can be reported and investigated.</label>
+          {errors.ownershipDeclaration && <span className="market-field-error">{errors.ownershipDeclaration.message}</span>}
+          <p style={{fontSize:12,color:"var(--text-secondary)",marginTop:8}}>For phones, laptops and high-value electronics, keep purchase receipts, original packaging or other legitimate ownership evidence. Never publish sensitive identifiers or ID documents in listing descriptions. This declaration does not constitute verification.</p>
+        </div>
         <div style={{ borderTop: "1px solid var(--market-border)", paddingTop: 12 }}>
           <label style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, display: "block" }}>Promotion (optional)</label>
           <Controller
