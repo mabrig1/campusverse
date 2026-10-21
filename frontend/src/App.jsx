@@ -3,6 +3,8 @@ import { api, setAuthToken } from './api';
 import AuthScreen from './AuthScreen';
 import WalletTab from './WalletTab';
 import MarketplaceBrowse from './marketplace/MarketplaceBrowse';
+import CommunityHub from './CommunityHub';
+import OpportunityHub from './OpportunityHub';
 
 // SVG Icons
 const Icons = {
@@ -346,6 +348,10 @@ export default function App() {
           <a href="#" className={`nav-item ${currentTab === 'dashboard' ? 'active' : ''}`} onClick={() => setCurrentTab('dashboard')}>
             <Icons.Home /> <span>News Feed</span>
           </a>
+          <a href="#" className={`nav-item ${currentTab === 'community' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setCurrentTab('community'); }}>
+            <Icons.Directory /> <span>Communities</span>
+          </a>
+          <a href="#" className={`nav-item ${currentTab === 'opportunities' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setCurrentTab('opportunities'); }}><Icons.Services /> <span>Scholarships & Skills</span></a>
           <a href="#" className={`nav-item ${currentTab === 'marketplace' ? 'active' : ''}`} onClick={() => setCurrentTab('marketplace')}>
             <Icons.Marketplace /> <span>Marketplace</span>
           </a>
@@ -389,6 +395,8 @@ export default function App() {
           <div className="page-title-container">
             <h1 className="page-title">
               {currentTab === 'dashboard' && 'UNN Campus Hub'}
+              {currentTab === 'community' && 'Find Your Campus Community'}
+              {currentTab === 'opportunities' && 'Student Opportunities & Savings'}
               {currentTab === 'marketplace' && 'UNN Student Marketplace'}
               {currentTab === 'services' && 'Student Service Economy'}
               {currentTab === 'directory' && 'Nsukka Business Directory'}
@@ -398,6 +406,8 @@ export default function App() {
             </h1>
             <span className="page-subtitle">
               {currentTab === 'dashboard' && 'Social forums, news, and student interactions'}
+              {currentTab === 'community' && 'Meet people, find interests, and start meaningful conversations'}
+              {currentTab === 'opportunities' && 'Scholarships, new skills, study resources and student tech deals'}
               {currentTab === 'marketplace' && 'Secure buying and selling within Nsukka'}
               {currentTab === 'services' && 'Hire student talent or view professional portfolios'}
               {currentTab === 'directory' && 'Find verified restaurants, printing hubs, and shuttles'}
@@ -426,6 +436,10 @@ export default function App() {
         )}
 
         {/* Tab contents */}
+
+        {currentTab === 'community' && <CommunityHub user={user} onMarketplace={() => setCurrentTab('marketplace')} onStartConversation={(tag, prompt) => { setNewPostTag(tag); setNewPostContent(prompt); setCurrentTab('dashboard'); }} />}
+
+        {currentTab === 'opportunities' && <OpportunityHub onMarketplace={() => setCurrentTab('marketplace')} />}
 
         {/* News Feed Tab */}
         {currentTab === 'dashboard' && (

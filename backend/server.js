@@ -31,7 +31,33 @@ const PORT = process.env.PORT || 5000;
 // controls which origins may call these endpoints.
 app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "64kb" }));
+
+// Per-instance abuse protection. Deploy a shared Redis/edge limiter before
+// scaling to multiple replicas: this limiter does not coordinate instances.
+const abuseBuckets = new Map();
+function throttle({ windowMs, max }) {
+  return (req, res, next) => {
+    const now = Date.now();
+    const key = `${req.ip || req.socket.remoteAddress}:${req.path}`;
+    if (abuseBuckets.size > 10000) {
+      for (const [k, value] of abuseBuckets) if (value.expires <= now) abuseBuckets.delete(k);
+    }
+    const state = abuseBuckets.get(key);
+    const nextState = !state || state.expires <= now
+      ? { count: 1, expires: now + windowMs }
+      : { count: state.count + 1, expires: state.expires };
+    abuseBuckets.set(key, nextState);
+    if (nextState.count > max) {
+      res.set("Retry-After", String(Math.ceil((nextState.expires - now) / 1000)));
+      return res.status(429).json({ error: "Too many attempts. Please try again later." });
+    }
+    next();
+  };
+}
+const authThrottle = throttle({ windowMs: 15 * 60 * 1000, max: 15 });
+const reportThrottle = throttle({ windowMs: 60 * 60 * 1000, max: 20 });
+
 
 function handleError(res, err) {
   if (err instanceof InsufficientFundsError) {
@@ -144,7 +170,7 @@ const registerSchema = z.object({
   phone: z.string().optional(),
 });
 
-app.post("/api/auth/register", async (req, res) => {
+app.post("/api/auth/register", authThrottle, async (req, res) => {
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid input" });
@@ -165,8 +191,8 @@ app.post("/api/auth/register", async (req, res) => {
       regNo,
       hostel,
       phone,
-      phoneVerified: Boolean(phone),
-      emailVerified: true,
+      phoneVerified: false, // Providing a number is NOT proof of control.
+      emailVerified: false, // Email requires an explicit verification challenge.
       wallet: { create: { balance: 0 } },
     },
   });
@@ -180,7 +206,7 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
-app.post("/api/auth/login", async (req, res) => {
+app.post("/api/auth/login", authThrottle, async (req, res) => {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "Enter a valid email and password" });
@@ -201,7 +227,7 @@ app.post("/api/auth/login", async (req, res) => {
 // and this endpoint verifies that token server-side before treating it as
 // proof of identity. Reuses the same User table and JWT issuance as
 // email/password auth; email is the join key between the two.
-app.post("/api/auth/google", async (req, res) => {
+app.post("/api/auth/google", authThrottle, async (req, res) => {
   const idToken = req.body?.credential;
   if (!idToken) return res.status(400).json({ error: "Missing Google credential" });
 
@@ -257,100 +283,19 @@ app.get("/api/me", requireAuth, async (req, res) => {
 // wired up) but now persist to the authenticated user instead of only
 // existing in frontend React state.
 
-app.post("/api/verify/student-id", requireAuth, async (req, res) => {
-  const regNo = String(req.body?.regNo || "").trim();
-  if (!regNo) return res.status(400).json({ error: "Registration number is required" });
-
-  const user = await prisma.user.update({
-    where: { id: req.userId },
-    data: { studentIdVerified: true, regNo },
-  });
-  res.json({ success: true, message: `UNN Student Record verified: ${regNo.toUpperCase()}`, user: await serializeUser(user) });
+// Verification providers have not been integrated. Never issue a verified badge
+// or claim a stolen-device clearance based on demo data.
+const verificationUnavailable = (_req, res) => res.status(503).json({
+  success: false,
+  error: "Independent identity and device verification are not configured. Do not share NIN, BVN, or identity images here.",
 });
-
-app.post("/api/verify/selfie", requireAuth, async (req, res) => {
-  if (!req.body?.selfieBase64) {
-    return res.status(400).json({ success: false, message: "Selfie image data is required" });
-  }
-  const user = await prisma.user.update({ where: { id: req.userId }, data: { selfieVerified: true } });
-  res.json({
-    success: true,
-    matchConfidence: 98.4,
-    livenessDetected: true,
-    message: "Face match matches student ID photo",
-    user: await serializeUser(user),
-  });
-});
-
-app.post("/api/verify/nin", requireAuth, async (req, res) => {
-  const { nin } = req.body;
-  if (!nin || String(nin).length !== 11) {
-    return res.status(400).json({ success: false, message: "NIN must be exactly 11 digits" });
-  }
-  const user = await prisma.user.update({ where: { id: req.userId }, data: { ninVerified: true } });
-  res.json({
-    success: true,
-    message: "NIN identity matching successful",
-    data: { fullName: user.name.toUpperCase(), stateOfOrigin: "Enugu State" },
-    user: await serializeUser(user),
-  });
-});
-
-app.post("/api/verify/bvn", requireAuth, async (req, res) => {
-  const { bvn } = req.body;
-  if (!bvn || String(bvn).length !== 11) {
-    return res.status(400).json({ success: false, message: "BVN must be exactly 11 digits" });
-  }
-  const user = await prisma.user.update({ where: { id: req.userId }, data: { bvnVerified: true } });
-  res.json({
-    success: true,
-    message: "BVN identity matches biometric record",
-    data: { fullName: user.name.toUpperCase(), bankVerified: "Access Bank PLC" },
-    user: await serializeUser(user),
-  });
-});
-
-const blacklistedIMEIs = ["357289110482937", "861002938172930"];
-
-app.post("/api/verify/imei", (req, res) => {
-  const { imei } = req.body;
-  if (!imei) return res.status(400).json({ success: false, message: "IMEI is required" });
-
-  const isBlacklisted = blacklistedIMEIs.includes(String(imei).trim());
-  res.json({
-    imei,
-    clean: !isBlacklisted,
-    status: isBlacklisted ? "Blacklisted / Reported Stolen" : "Clean",
-    source: isBlacklisted ? "Nigeria Police Force & Campus Security Database" : "Checked globally",
-    carrierLock: "Unlocked",
-  });
-});
-
-app.post("/api/fraud-risk", (req, res) => {
-  const { deviceFingerprint, location } = req.body;
-  let riskScore = 15;
-  const flags = [];
-
-  if (!deviceFingerprint) {
-    riskScore += 20;
-    flags.push("No device identifier");
-  }
-  if (location && !location.toLowerCase().includes("nsukka") && !location.toLowerCase().includes("enugu")) {
-    riskScore += 30;
-    flags.push("Geo-location anomaly: Out of campus region");
-  }
-
-  let riskLevel = "Low";
-  if (riskScore > 30) riskLevel = "Moderate";
-  if (riskScore > 60) riskLevel = "High";
-
-  res.json({
-    riskScore,
-    riskLevel,
-    flags,
-    action: riskLevel === "High" ? "Trigger OTP & Biometric Challenge" : "Approve Transaction",
-  });
-});
+for (const path of ["/api/verify/student-id", "/api/verify/selfie", "/api/verify/nin", "/api/verify/bvn", "/api/verify/imei"]) {
+  app.post(path, requireAuth, verificationUnavailable);
+}
+// The previous heuristic was only a demonstration, not fraud intelligence.
+app.post("/api/fraud-risk", requireAuth, (_req, res) => res.status(503).json({
+  error: "Fraud risk scoring unavailable: verified detection service not configured.",
+}));
 
 // ---------- Wallet ----------
 
@@ -363,6 +308,9 @@ app.get("/api/wallet", requireAuth, async (req, res) => {
 });
 
 app.post("/api/wallet/topup", requireAuth, async (req, res) => {
+  if (process.env.ALLOW_SIMULATED_TOPUPS !== "true" || process.env.NODE_ENV === "production") {
+    return res.status(503).json({ error: "Wallet top-ups are unavailable until verified payment processing is configured." });
+  }
   const amount = Number(req.body?.amount);
   if (!Number.isFinite(amount) || amount <= 0) {
     return res.status(400).json({ error: "Enter an amount greater than zero" });
@@ -542,6 +490,8 @@ const productSchema = z.object({
   location: z.enum(CAMPUS_LOCATIONS),
   images: z.array(z.string().url()).min(1).max(6),
   inspectionRequired: z.boolean().optional(),
+  ownershipDeclaration: z.literal(true),
+  marketplacePolicyAccepted: z.literal(true),
 });
 
 app.post("/api/products", requireAuth, async (req, res) => {
@@ -549,7 +499,8 @@ app.post("/api/products", requireAuth, async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid product" });
   }
-  const { images, ...rest } = parsed.data;
+  const { images, ownershipDeclaration, marketplacePolicyAccepted, ...rest } = parsed.data;
+  // An ownership declaration is an acknowledgement, never ownership verification.
   const product = await prisma.product.create({
     data: { ...rest, imagesJson: JSON.stringify(images), sellerId: req.userId },
     include: { seller: true },
@@ -584,9 +535,9 @@ app.delete("/api/favorites/:productId", requireAuth, async (req, res) => {
 
 // ---------- Reports (feeds a future admin moderation queue) ----------
 
-app.post("/api/products/:id/report", requireAuth, async (req, res) => {
+app.post("/api/products/:id/report", requireAuth, reportThrottle, async (req, res) => {
   const reason = String(req.body?.reason || "").trim();
-  if (!reason) return res.status(400).json({ error: "Choose a reason for this report" });
+  if (!reason || reason.length > 500) return res.status(400).json({ error: "Provide a reason of 1–500 characters" });
 
   const product = await prisma.product.findUnique({ where: { id: req.params.id } });
   if (!product) return res.status(404).json({ error: "Listing not found" });
@@ -594,7 +545,7 @@ app.post("/api/products/:id/report", requireAuth, async (req, res) => {
   await prisma.report.create({
     data: { reporterId: req.userId, productId: product.id, reason },
   });
-  res.status(201).json({ success: true, message: "Thanks — our team will review this listing." });
+  res.status(201).json({ success: true, message: "Report received and queued for review." });
 });
 
 // ---------- Promotions ----------
@@ -663,6 +614,7 @@ app.post("/api/escrow", requireAuth, async (req, res) => {
   const productId = req.body?.productId;
   const product = await prisma.product.findUnique({ where: { id: productId } });
   if (!product) return res.status(404).json({ error: "Product not found" });
+  if (product.category === "Accommodation & Roommates") return res.status(400).json({ error: "Rent and deposits are not supported through marketplace escrow. Verify property and advertiser independently." });
   if (product.sellerId === req.userId) {
     return res.status(400).json({ error: "You can't buy your own listing" });
   }

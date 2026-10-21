@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
-import { ShieldQuestion } from "lucide-react";
 import { api } from "../api";
 import { useCampusConfig } from "./useCampusConfig";
 import FilterBar from "./FilterBar";
@@ -34,8 +33,6 @@ export default function MarketplaceBrowse({ user, showToast, onBuyEscrow }) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [selectedProductId, setSelectedProductId] = useState(null);
   const [showSellForm, setShowSellForm] = useState(false);
-  const [imeiInput, setImeiInput] = useState("");
-  const [imeiReport, setImeiReport] = useState(null);
   const sentinelRef = useRef(null);
   const debounceRef = useRef(null);
 
@@ -111,50 +108,38 @@ export default function MarketplaceBrowse({ user, showToast, onBuyEscrow }) {
     window.location.href = `tel:${product.seller.phone}`;
   };
 
-  const checkImei = async () => {
-    if (!imeiInput) {
-      showToast("Enter a device IMEI or serial number");
-      return;
-    }
-    try {
-      const data = await api.verifyImei(imeiInput);
-      setImeiReport(data);
-      showToast(data.clean ? "IMEI Clean! Device safe for buy/sell." : "WARNING: This device is flagged as stolen/blacklisted!");
-    } catch (err) {
-      showToast(err.message);
-    }
-  };
-
   return (
     <div className="cv-market" style={{ paddingBottom: 100 }}>
       <div className="glass-panel" style={{ padding: 20, marginBottom: 20, display: "flex", justifyContent: "space-between", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
         <div>
           <h3 style={{ fontSize: 16, fontWeight: 600 }}>List something for sale</h3>
           <p style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 4 }}>
-            Reach verified students on your campus. Promoted listings get seen first.
+            Reach students on your campus. Seller and listing verification are not yet available.
           </p>
         </div>
       </div>
 
-      <div className="glass-panel" style={{ padding: 16, marginBottom: 20, display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, fontWeight: 600 }}>
-          <ShieldQuestion size={16} /> Anti-theft device check
+      <section className="glass-panel" aria-label="Graduation sale" style={{padding:"24px",marginBottom:20,background:"linear-gradient(110deg,rgba(16,185,129,.19),rgba(139,92,246,.14))",border:"1px solid rgba(52,211,153,.28)",borderRadius:18}}>
+        <span style={{fontSize:12,color:"#6ee7b7",fontWeight:700,letterSpacing:1}}>🎓 FINAL YEAR CLEAR-OUT</span>
+        <h2 style={{fontSize:"clamp(22px,3vw,30px)",margin:"9px 0"}}>Graduating? Pass it on, earn something back.</h2>
+        <p style={{fontSize:14,color:"var(--text-secondary)",maxWidth:640,lineHeight:1.7}}>Sell your textbooks, reading tables, mini-fridges, mattresses and other useful items to students who need them. Buyers: find affordable pre-loved campus essentials.</p>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:20}}>
+          <button type="button" className="btn market-btn-primary" onClick={()=>setShowSellForm(true)}>+ Sell my old stuff</button>
+          <button type="button" className="btn btn-secondary" onClick={()=>setFilters({...EMPTY_FILTERS,category:"Graduation Sale"})}>Browse graduation deals</button>
         </div>
-        <input
-          className="market-input"
-          style={{ flex: 1, minWidth: 200 }}
-          placeholder="Enter IMEI or serial number…"
-          value={imeiInput}
-          onChange={(e) => setImeiInput(e.target.value)}
-        />
-        <button className="btn market-btn-primary" onClick={checkImei}>
-          Verify
-        </button>
-        {imeiReport && (
-          <span style={{ fontSize: 12, color: imeiReport.clean ? "#34d399" : "#f87171" }}>{imeiReport.status}</span>
-        )}
-      </div>
+        <p style={{fontSize:12,color:"var(--text-secondary)",marginTop:14}}>When listing, select “Graduation Sale” as the category. Meet in public campus locations, inspect items and avoid advance payments outside trusted channels. Identity and device verification are not currently available.</p>
+      </section>
 
+      <section className="glass-panel" aria-label="Accommodation and roommates" style={{padding:24,marginBottom:20,border:"1px solid rgba(125,211,252,.3)",borderRadius:18,background:"linear-gradient(105deg,rgba(14,165,233,.14),rgba(139,92,246,.1))"}}>
+        <span style={{fontSize:12,color:"#7dd3fc",letterSpacing:1,fontWeight:700}}>🏠 STUDENT ACCOMMODATION</span>
+        <h2 style={{fontSize:"clamp(22px,3vw,30px)",margin:"10px 0"}}>Find a room. Find a roommate. Feel at home.</h2>
+        <p style={{fontSize:14,lineHeight:1.6,color:"var(--text-secondary)"}}>Explore hostel spaces, room vacancies and roommate opportunities. Include the location, term/rent period and all charges clearly. No accommodation is currently verified by CampusVerse.</p>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:18}}>
+          <button type="button" className="btn market-btn-primary" onClick={()=>setFilters({...EMPTY_FILTERS,category:"Accommodation & Roommates"})}>Browse accommodation</button>
+          <button type="button" className="btn btn-secondary" onClick={()=>setShowSellForm(true)}>+ Advertise a room</button>
+        </div>
+        <p style={{fontSize:12,color:"var(--text-secondary)",marginTop:12}}>⚠️ Never pay inspection fees, deposits or rent before confirming the property and the advertiser's authority. See our <a href="/marketplace-safety-policy.html" target="_blank" rel="noopener noreferrer" style={{color:"#7dd3fc"}}>safety policy</a>.</p>
+      </section>
       <FilterBar filters={filters} onChange={setFilters} config={config} currentUser={user} />
 
       {loading ? (
