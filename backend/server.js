@@ -614,6 +614,7 @@ app.post("/api/escrow", requireAuth, async (req, res) => {
   const productId = req.body?.productId;
   const product = await prisma.product.findUnique({ where: { id: productId } });
   if (!product) return res.status(404).json({ error: "Product not found" });
+  if (product.category === "Accommodation & Roommates") return res.status(400).json({ error: "Rent and deposits are not supported through marketplace escrow. Verify property and advertiser independently." });
   if (product.sellerId === req.userId) {
     return res.status(400).json({ error: "You can't buy your own listing" });
   }
