@@ -67,6 +67,7 @@ export default function SellListingForm({ onClose, onCreated, showToast }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config]);
 
+  const isAccommodation = watch("category") === "Accommodation & Roommates";
   const promotionTier = watch("promotionTier");
   const promotionDays = watch("promotionDays") || 1;
   const promotionCost = promotionTier !== "NONE" && config ? config.pricing[promotionTier] * promotionDays : 0;
@@ -131,6 +132,7 @@ export default function SellListingForm({ onClose, onCreated, showToast }) {
           </select>
         </div>
 
+        {isAccommodation && <p style={{padding:12,border:"1px solid rgba(125,211,252,.35)",borderRadius:10,fontSize:13,lineHeight:1.6}}>🏠 Accommodation advertisement: state the property area, rent period (monthly/annual), deposit, service charges, availability, occupancy and permission to advertise in your description. The price field is an advertised price only, not a booking or payment request. CampusVerse has not inspected this property.</p>}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           <select className="market-input" {...register("conditionType")}>
             <option value="NEW">New</option>
@@ -176,7 +178,7 @@ export default function SellListingForm({ onClose, onCreated, showToast }) {
         </label>
 
         <div style={{padding:12,border:"1px solid rgba(245,158,11,.35)",borderRadius:10}}>
-          <label style={{display:"flex",gap:10,alignItems:"start",fontSize:13,lineHeight:1.5}}><input type="checkbox" {...register("ownershipDeclaration")} />I confirm this item belongs to me or I have the owner’s permission to sell it. I understand that suspected stolen property can be reported and investigated.</label>
+          <label style={{display:"flex",gap:10,alignItems:"start",fontSize:13,lineHeight:1.5}}><input type="checkbox" {...register("ownershipDeclaration")} />{isAccommodation ? "I confirm I am authorised to advertise this accommodation or roommate opportunity, and all terms and charges are honestly described." : "I confirm this item belongs to me or I have the owner’s permission to sell it. I understand that suspected stolen property can be reported and investigated."}</label>
           {errors.ownershipDeclaration && <span className="market-field-error">{errors.ownershipDeclaration.message}</span>}
           <label style={{display:"flex",alignItems:"start",gap:10,fontSize:13,lineHeight:1.5,marginTop:12}}><input type="checkbox" {...register("marketplacePolicyAccepted")}/><span>I have read and agree to the <a href="/marketplace-safety-policy.html" target="_blank" rel="noopener noreferrer" style={{color:"#6ee7b7",textDecoration:"underline"}}>Marketplace Safety &amp; Ownership Policy</a>.</span></label>
           {errors.marketplacePolicyAccepted && <span className="market-field-error">{errors.marketplacePolicyAccepted.message}</span>}
