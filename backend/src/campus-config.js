@@ -17,6 +17,7 @@ export const CAMPUS_LOCATIONS = [
 
 export const MARKETPLACE_CATEGORIES = [
   "Graduation Sale",
+  "Accommodation & Roommates",
   "Textbooks",
   "Past Questions",
   "Electronics",
