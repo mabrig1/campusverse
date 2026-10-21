@@ -490,6 +490,7 @@ const productSchema = z.object({
   location: z.enum(CAMPUS_LOCATIONS),
   images: z.array(z.string().url()).min(1).max(6),
   inspectionRequired: z.boolean().optional(),
+  ownershipDeclaration: z.literal(true),
 });
 
 app.post("/api/products", requireAuth, async (req, res) => {
@@ -497,7 +498,8 @@ app.post("/api/products", requireAuth, async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid product" });
   }
-  const { images, ...rest } = parsed.data;
+  const { images, ownershipDeclaration, ...rest } = parsed.data;
+  // An ownership declaration is an acknowledgement, never ownership verification.
   const product = await prisma.product.create({
     data: { ...rest, imagesJson: JSON.stringify(images), sellerId: req.userId },
     include: { seller: true },
