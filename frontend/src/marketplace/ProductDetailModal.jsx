@@ -184,11 +184,10 @@ export default function ProductDetailModal({
                   </div>
                 )}
 
+                {product.category === "Accommodation & Roommates" && <p style={{padding:12,background:"rgba(245,158,11,.1)",borderRadius:10,fontSize:12,lineHeight:1.6,marginBottom:12}}>This is an unverified accommodation advert, not a confirmed booking. Independently inspect the property and confirm the advertiser’s authority before paying any money. CampusVerse does not process accommodation rent or deposits.</p>}
                 {!isOwnListing && (
                   <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-                    <button className="btn market-btn-primary" style={{ flex: 1 }} onClick={() => onBuyEscrow(product)}>
-                      Buy Escrow
-                    </button>
+                    {product.category !== "Accommodation & Roommates" && <button className="btn market-btn-primary" style={{ flex: 1 }} onClick={() => onBuyEscrow(product)}>Buy Escrow</button>}
                     <a
                       href={product.whatsappLink || undefined}
                       target="_blank"
