@@ -1,0 +1,21 @@
+import { useState } from 'react';
+import { GraduationCap, BookOpen, Laptop, BadgePercent, ArrowUpRight, Search, ShieldAlert, Sparkles } from 'lucide-react';
+import './OpportunityHub.css';
+
+const resources = [
+  { id:'scholarships',title:'Find scholarships',icon:'🎓',category:'Scholarships',description:'Search scholarship opportunities and check eligibility, deadlines and official requirements.',links:[{name:'Study in the UK — scholarships',url:'https://study-uk.britishcouncil.org/scholarships-funding'},{name:'DAAD Scholarship Database',url:'https://www.daad.de/en/studying-in-germany/scholarships/daad-scholarship-database/'}],disclaimer:'These are external scholarship search resources, not confirmed open applications. Always verify the current deadline and award conditions on the provider site.' },
+  { id:'skills',title:'Develop a new skill',icon:'🚀',category:'Skills',description:'Build practical skills in coding, data analysis, entrepreneurship, writing and digital creativity.',links:[{name:'freeCodeCamp',url:'https://www.freecodecamp.org/learn/'},{name:'Microsoft Learn',url:'https://learn.microsoft.com/training/'}],disclaimer:'Courses are provided by external platforms; availability, certification and fees vary.'},
+  { id:'notes',title:'Download lecture notes',icon:'📚',category:'Study resources',description:'Browse openly available learning resources while the campus-specific, lecturer-approved notes library is developed.',links:[{name:'OpenStax free textbooks',url:'https://openstax.org/subjects'},{name:'MIT OpenCourseWare',url:'https://ocw.mit.edu/'}],disclaimer:'Only share/download notes with permission or an appropriate licence. CampusVerse-hosted departmental note uploads and downloads are not live yet.'}
+];
+export default function OpportunityHub({onMarketplace}) {
+ const [query,setQuery]=useState('');
+ const shown=resources.filter(item=>`${item.title} ${item.description} ${item.category}`.toLowerCase().includes(query.toLowerCase()));
+ return <section className="cv-opportunities">
+   <div className="cv-opp-hero"><span className="cv-opp-label"><Sparkles size={15}/> THE STUDENT ADVANTAGE</span><h2>Study smarter. Learn more.<br/><em>Spend less.</em></h2><p>One place to start discovering scholarships, free learning resources, new skills and student-friendly gadgets.</p><div className="cv-opp-hero-actions"><a href="#opportunity-resources" className="cv-opp-btn">Explore opportunities <ArrowUpRight size={16}/></a><button className="cv-opp-ghost" onClick={onMarketplace}>Shop gadgets</button></div></div>
+   <div className="cv-opp-strip"><span><GraduationCap size={19}/> Scholarship discovery</span><span><BookOpen size={19}/> Learning resources</span><span><Laptop size={19}/> Student gadgets</span><span><BadgePercent size={19}/> Compare real savings</span></div>
+   <div className="cv-opp-section-title" id="opportunity-resources"><div><span>YOUR NEXT OPPORTUNITY</span><h3>Choose where to grow</h3></div><label className="cv-opp-search"><Search size={17}/><input placeholder="Search opportunities…" value={query} onChange={e=>setQuery(e.target.value)} aria-label="Search opportunities"/></label></div>
+   <div className="cv-opp-grid">{shown.map(item=><article key={item.id} className="cv-opp-card"><span className="cv-opp-icon">{item.icon}</span><small>{item.category}</small><h4>{item.title}</h4><p>{item.description}</p><div className="cv-opp-links">{item.links.map(link=><a key={link.url} href={link.url} target="_blank" rel="noopener noreferrer">{link.name} <ArrowUpRight size={15}/></a>)}</div><p className="cv-opp-disclaimer">{item.disclaimer}</p></article>)}</div>
+   {shown.length===0&&<p>No matching resources. Try another search.</p>}
+   <div className="cv-opp-deals"><div><span className="cv-opp-label">💻 CAMPUS TECH DEALS</span><h3>Buy gadgets for less</h3><p>Explore pre-owned laptops, phones and accessories offered by students. Compare prices and inspect items before paying.</p><p className="cv-opp-disclaimer"><ShieldAlert size={14}/> “Up to 70% off” is a future promotional goal, not a verified discount currently available on CampusVerse. Any future discount must be calculated from a documented genuine reference price.</p></div><button onClick={onMarketplace} className="cv-opp-btn">Browse gadgets <ArrowUpRight size={16}/></button></div>
+ </section>;
+}
