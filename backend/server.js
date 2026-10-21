@@ -31,7 +31,33 @@ const PORT = process.env.PORT || 5000;
 // controls which origins may call these endpoints.
 app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "64kb" }));
+
+// Per-instance abuse protection. Deploy a shared Redis/edge limiter before
+// scaling to multiple replicas: this limiter does not coordinate instances.
+const abuseBuckets = new Map();
+function throttle({ windowMs, max }) {
+  return (req, res, next) => {
+    const now = Date.now();
+    const key = `${req.ip || req.socket.remoteAddress}:${req.path}`;
+    if (abuseBuckets.size > 10000) {
+      for (const [k, value] of abuseBuckets) if (value.expires <= now) abuseBuckets.delete(k);
+    }
+    const state = abuseBuckets.get(key);
+    const nextState = !state || state.expires <= now
+      ? { count: 1, expires: now + windowMs }
+      : { count: state.count + 1, expires: state.expires };
+    abuseBuckets.set(key, nextState);
+    if (nextState.count > max) {
+      res.set("Retry-After", String(Math.ceil((nextState.expires - now) / 1000)));
+      return res.status(429).json({ error: "Too many attempts. Please try again later." });
+    }
+    next();
+  };
+}
+const authThrottle = throttle({ windowMs: 15 * 60 * 1000, max: 15 });
+const reportThrottle = throttle({ windowMs: 60 * 60 * 1000, max: 20 });
+
 
 function handleError(res, err) {
   if (err instanceof InsufficientFundsError) {
@@ -144,7 +170,7 @@ const registerSchema = z.object({
   phone: z.string().optional(),
 });
 
-app.post("/api/auth/register", async (req, res) => {
+app.post("/api/auth/register", authThrottle, async (req, res) => {
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid input" });
@@ -165,8 +191,8 @@ app.post("/api/auth/register", async (req, res) => {
       regNo,
       hostel,
       phone,
-      phoneVerified: Boolean(phone),
-      emailVerified: true,
+      phoneVerified: false, // Providing a number is NOT proof of control.
+      emailVerified: false, // Email requires an explicit verification challenge.
       wallet: { create: { balance: 0 } },
     },
   });
@@ -180,7 +206,7 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
-app.post("/api/auth/login", async (req, res) => {
+app.post("/api/auth/login", authThrottle, async (req, res) => {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "Enter a valid email and password" });
@@ -201,7 +227,7 @@ app.post("/api/auth/login", async (req, res) => {
 // and this endpoint verifies that token server-side before treating it as
 // proof of identity. Reuses the same User table and JWT issuance as
 // email/password auth; email is the join key between the two.
-app.post("/api/auth/google", async (req, res) => {
+app.post("/api/auth/google", authThrottle, async (req, res) => {
   const idToken = req.body?.credential;
   if (!idToken) return res.status(400).json({ error: "Missing Google credential" });
 
@@ -363,6 +389,9 @@ app.get("/api/wallet", requireAuth, async (req, res) => {
 });
 
 app.post("/api/wallet/topup", requireAuth, async (req, res) => {
+  if (process.env.ALLOW_SIMULATED_TOPUPS !== "true" || process.env.NODE_ENV === "production") {
+    return res.status(503).json({ error: "Wallet top-ups are unavailable until verified payment processing is configured." });
+  }
   const amount = Number(req.body?.amount);
   if (!Number.isFinite(amount) || amount <= 0) {
     return res.status(400).json({ error: "Enter an amount greater than zero" });
@@ -584,9 +613,9 @@ app.delete("/api/favorites/:productId", requireAuth, async (req, res) => {
 
 // ---------- Reports (feeds a future admin moderation queue) ----------
 
-app.post("/api/products/:id/report", requireAuth, async (req, res) => {
+app.post("/api/products/:id/report", requireAuth, reportThrottle, async (req, res) => {
   const reason = String(req.body?.reason || "").trim();
-  if (!reason) return res.status(400).json({ error: "Choose a reason for this report" });
+  if (!reason || reason.length > 500) return res.status(400).json({ error: "Provide a reason of 1–500 characters" });
 
   const product = await prisma.product.findUnique({ where: { id: req.params.id } });
   if (!product) return res.status(404).json({ error: "Listing not found" });
@@ -594,7 +623,7 @@ app.post("/api/products/:id/report", requireAuth, async (req, res) => {
   await prisma.report.create({
     data: { reporterId: req.userId, productId: product.id, reason },
   });
-  res.status(201).json({ success: true, message: "Thanks — our team will review this listing." });
+  res.status(201).json({ success: true, message: "Report received and queued for review." });
 });
 
 // ---------- Promotions ----------
