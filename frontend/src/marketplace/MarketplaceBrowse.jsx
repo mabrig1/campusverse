@@ -114,7 +114,7 @@ export default function MarketplaceBrowse({ user, showToast, onBuyEscrow }) {
         <div>
           <h3 style={{ fontSize: 16, fontWeight: 600 }}>List something for sale</h3>
           <p style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 4 }}>
-            Reach verified students on your campus. Promoted listings get seen first.
+            Reach students on your campus. Seller and listing verification are not yet available.
           </p>
         </div>
       </div>
@@ -130,6 +130,16 @@ export default function MarketplaceBrowse({ user, showToast, onBuyEscrow }) {
         <p style={{fontSize:12,color:"var(--text-secondary)",marginTop:14}}>When listing, select “Graduation Sale” as the category. Meet in public campus locations, inspect items and avoid advance payments outside trusted channels. Identity and device verification are not currently available.</p>
       </section>
 
+      <section className="glass-panel" aria-label="Accommodation and roommates" style={{padding:24,marginBottom:20,border:"1px solid rgba(125,211,252,.3)",borderRadius:18,background:"linear-gradient(105deg,rgba(14,165,233,.14),rgba(139,92,246,.1))"}}>
+        <span style={{fontSize:12,color:"#7dd3fc",letterSpacing:1,fontWeight:700}}>🏠 STUDENT ACCOMMODATION</span>
+        <h2 style={{fontSize:"clamp(22px,3vw,30px)",margin:"10px 0"}}>Find a room. Find a roommate. Feel at home.</h2>
+        <p style={{fontSize:14,lineHeight:1.6,color:"var(--text-secondary)"}}>Explore hostel spaces, room vacancies and roommate opportunities. Include the location, term/rent period and all charges clearly. No accommodation is currently verified by CampusVerse.</p>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:18}}>
+          <button type="button" className="btn market-btn-primary" onClick={()=>setFilters({...EMPTY_FILTERS,category:"Accommodation & Roommates"})}>Browse accommodation</button>
+          <button type="button" className="btn btn-secondary" onClick={()=>setShowSellForm(true)}>+ Advertise a room</button>
+        </div>
+        <p style={{fontSize:12,color:"var(--text-secondary)",marginTop:12}}>⚠️ Never pay inspection fees, deposits or rent before confirming the property and the advertiser's authority. See our <a href="/marketplace-safety-policy.html" target="_blank" rel="noopener noreferrer" style={{color:"#7dd3fc"}}>safety policy</a>.</p>
+      </section>
       <FilterBar filters={filters} onChange={setFilters} config={config} currentUser={user} />
 
       {loading ? (
