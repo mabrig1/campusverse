@@ -3,6 +3,7 @@ import { api, setAuthToken } from './api';
 import AuthScreen from './AuthScreen';
 import WalletTab from './WalletTab';
 import MarketplaceBrowse from './marketplace/MarketplaceBrowse';
+import LaptopExchange from './LaptopExchange';
 
 // SVG Icons
 const Icons = {
@@ -63,14 +64,14 @@ const Icons = {
   )
 };
 
-export default function App() {
+export default function App({ initialTab = 'dashboard' }) {
   const [token, setToken] = useState(() => {
     const stored = localStorage.getItem('cv_token');
     if (stored) setAuthToken(stored);
     return stored;
   });
   const [user, setUser] = useState(null);
-  const [currentTab, setCurrentTab] = useState('dashboard');
+  const [currentTab, setCurrentTab] = useState(initialTab);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
 
@@ -349,6 +350,9 @@ export default function App() {
           <a href="#" className={`nav-item ${currentTab === 'marketplace' ? 'active' : ''}`} onClick={() => setCurrentTab('marketplace')}>
             <Icons.Marketplace /> <span>Marketplace</span>
           </a>
+          <a href="#" className={`nav-item ${currentTab === 'laptops' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setCurrentTab('laptops'); }}>
+            <span className="nav-icon" aria-hidden="true">💻</span> <span>Buy • Sell • Swap Laptops</span>
+          </a>
           <a href="#" className={`nav-item ${currentTab === 'services' ? 'active' : ''}`} onClick={() => setCurrentTab('services')}>
             <Icons.Services /> <span>Services & Jobs</span>
           </a>
@@ -390,6 +394,7 @@ export default function App() {
             <h1 className="page-title">
               {currentTab === 'dashboard' && 'UNN Campus Hub'}
               {currentTab === 'marketplace' && 'UNN Student Marketplace'}
+              {currentTab === 'laptops' && 'Laptop Exchange • Buy / Sell / Swap'}
               {currentTab === 'services' && 'Student Service Economy'}
               {currentTab === 'directory' && 'Nsukka Business Directory'}
               {currentTab === 'wallet' && 'CampusVerse Wallet'}
@@ -399,6 +404,7 @@ export default function App() {
             <span className="page-subtitle">
               {currentTab === 'dashboard' && 'Social forums, news, and student interactions'}
               {currentTab === 'marketplace' && 'Secure buying and selling within Nsukka'}
+              {currentTab === 'laptops' && 'Compare real listings, propose swaps, and inspect before exchanging'}
               {currentTab === 'services' && 'Hire student talent or view professional portfolios'}
               {currentTab === 'directory' && 'Find verified restaurants, printing hubs, and shuttles'}
               {currentTab === 'wallet' && 'Top up, send money, and track every transaction'}
@@ -542,6 +548,8 @@ export default function App() {
         {currentTab === 'marketplace' && (
           <MarketplaceBrowse user={user} showToast={showToast} onBuyEscrow={startEscrowBuy} />
         )}
+
+        {currentTab === 'laptops' && <LaptopExchange user={user} />}
 
         {/* Services & Professional Network Tab */}
         {currentTab === 'services' && (

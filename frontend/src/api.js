@@ -21,6 +21,16 @@ async function request(path, options = {}) {
 }
 
 export const api = {
+  getLaptopListings: (params = {}) => {
+    const qs = new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== ""))).toString();
+    return request("/laptops" + (qs ? "?" + qs : ""));
+  },
+  getMyLaptops: () => request("/laptops/mine"),
+  getMyLaptopOffers: () => request("/laptops/offers"),
+  createLaptopListing: (payload) => request("/laptops", { method: "POST", body: JSON.stringify(payload) }),
+  setLaptopStatus: (id, status) => request("/laptops/" + encodeURIComponent(id) + "/status", { method: "PATCH", body: JSON.stringify({ status }) }),
+  createLaptopOffer: (id, payload) => request("/laptops/" + encodeURIComponent(id) + "/offers", { method: "POST", body: JSON.stringify(payload) }),
+  decideLaptopOffer: (id, status) => request("/laptops/offers/" + encodeURIComponent(id), { method: "PATCH", body: JSON.stringify({ status }) }),
   register: (payload) => request("/auth/register", { method: "POST", body: JSON.stringify(payload) }),
   login: (payload) => request("/auth/login", { method: "POST", body: JSON.stringify(payload) }),
   loginWithGoogle: (credential) => request("/auth/google", { method: "POST", body: JSON.stringify({ credential }) }),
