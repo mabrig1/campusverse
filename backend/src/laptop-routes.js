@@ -98,9 +98,15 @@ export function registerLaptopRoutes(app) {
       const updated = await tx.laptopListing.update({
         where: { id: existing.id, sellerId: req.userId }, data: { status: parsed.data.status },
       });
-      if (parsed.data.status !== "ACTIVE") await tx.laptopOffer.updateMany({
-        where: { targetId: existing.id, status: "PENDING" }, data: { status: "DECLINED" },
-      });
+      if (parsed.data.status !== "ACTIVE") {
+        await tx.laptopOffer.updateMany({
+          where: { targetId: existing.id, status: "PENDING" }, data: { status: "DECLINED" },
+        });
+        // Pending outgoing swaps are no longer valid when the offered laptop is paused/closed.
+        await tx.laptopOffer.updateMany({
+          where: { offeredId: existing.id, status: "PENDING" }, data: { status: "WITHDRAWN" },
+        });
+      }
       return updated;
     });
     res.json(item);
@@ -132,7 +138,10 @@ export function registerLaptopRoutes(app) {
     const parsed = decisionSchema.safeParse(req.body);
     if (!parsed.success) return fail(res, parsed);
     const offer = await prisma.laptopOffer.findUnique({
-      where: { id: req.params.id }, include: { target: { select: { sellerId: true } } },
+      where: { id: req.params.id }, include: {
+        target: { select: { sellerId: true, status: true } },
+        offered: { select: { sellerId: true, status: true } },
+      },
     });
     if (!offer) return res.status(404).json({ error: "Offer not found" });
     const isBuyer = offer.buyerId === req.userId;
@@ -140,6 +149,11 @@ export function registerLaptopRoutes(app) {
     if (parsed.data.status === "WITHDRAWN" ? !isBuyer : !isSeller)
       return res.status(403).json({ error: "Not authorised for this offer action" });
     if (offer.status !== "PENDING") return res.status(409).json({ error: "Offer is no longer pending" });
+    if (parsed.data.status === "ACCEPTED" &&
+        (offer.target.status !== "ACTIVE" ||
+          (offer.type === "SWAP" && (!offer.offered || offer.offered.status !== "ACTIVE" || offer.offered.sellerId !== offer.buyerId)))) {
+      return res.status(409).json({ error: "One of the laptops is no longer available for this offer" });
+    }
     const result = await prisma.laptopOffer.updateMany({
       where: { id: offer.id, status: "PENDING" }, data: { status: parsed.data.status },
     });

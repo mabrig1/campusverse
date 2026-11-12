@@ -74,8 +74,16 @@ model Transaction {
   @@index([walletId])
 }
 
-enum ConditionType { NEW USED }
-enum PromotionTier { NONE PINNED HIGHLIGHTED FEATURED }
+enum ConditionType {
+  NEW
+  USED
+}
+enum PromotionTier {
+  NONE
+  PINNED
+  HIGHLIGHTED
+  FEATURED
+}
 
 model Product {
   id                   String        @id @default(cuid())
@@ -160,7 +168,13 @@ model Review {
   @@index([productId])
 }
 
-enum EscrowStatus { FUNDS_LOCKED INSPECTED FUNDS_RELEASED DISPUTED REFUNDED }
+enum EscrowStatus {
+  FUNDS_LOCKED
+  INSPECTED
+  FUNDS_RELEASED
+  DISPUTED
+  REFUNDED
+}
 
 model EscrowTransaction {
   id                String       @id @default(cuid())
@@ -184,11 +198,31 @@ model EscrowTransaction {
 
 
 // Laptop Exchange: all condition and lock claims are seller declarations, never a verification badge.
-enum LaptopCondition { EXCELLENT GOOD FAIR NEEDS_REPAIR }
-enum LaptopLockStatus { NOT_CHECKED DECLARED_CLEAR }
-enum LaptopListingStatus { ACTIVE PAUSED CLOSED }
-enum LaptopOfferType { BUY SWAP }
-enum LaptopOfferStatus { PENDING ACCEPTED DECLINED WITHDRAWN }
+enum LaptopCondition {
+  EXCELLENT
+  GOOD
+  FAIR
+  NEEDS_REPAIR
+}
+enum LaptopLockStatus {
+  NOT_CHECKED
+  DECLARED_CLEAR
+}
+enum LaptopListingStatus {
+  ACTIVE
+  PAUSED
+  CLOSED
+}
+enum LaptopOfferType {
+  BUY
+  SWAP
+}
+enum LaptopOfferStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  WITHDRAWN
+}
 
 model LaptopListing {
   id               String              @id @default(cuid())
