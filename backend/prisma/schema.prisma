@@ -41,6 +41,8 @@ model User {
   favorites  Favorite[]
   reports    Report[]
   promotions Promotion[]
+  laptopListings LaptopListing[] @relation("LaptopListingsBySeller")
+  laptopOffers LaptopOffer[] @relation("LaptopOffersByBuyer")
 }
 
 model Wallet {
@@ -178,4 +180,61 @@ model EscrowTransaction {
   @@index([productId])
   @@index([buyerId])
   @@index([sellerId])
+}
+
+
+// Laptop Exchange: all condition and lock claims are seller declarations, never a verification badge.
+enum LaptopCondition { EXCELLENT GOOD FAIR NEEDS_REPAIR }
+enum LaptopLockStatus { NOT_CHECKED DECLARED_CLEAR }
+enum LaptopListingStatus { ACTIVE PAUSED CLOSED }
+enum LaptopOfferType { BUY SWAP }
+enum LaptopOfferStatus { PENDING ACCEPTED DECLINED WITHDRAWN }
+
+model LaptopListing {
+  id               String              @id @default(cuid())
+  seller           User                @relation("LaptopListingsBySeller", fields: [sellerId], references: [id])
+  sellerId         String
+  brand            String
+  model            String
+  processor        String
+  ramGb            Int
+  storageGb        Int
+  storageType      String
+  condition        LaptopCondition
+  batteryHealth    Int?
+  faults           String
+  description      String              @default("")
+  imageUrl         String?
+  serialLast4      String?
+  lockStatus       LaptopLockStatus    @default(NOT_CHECKED)
+  ownershipDeclared Boolean           @default(false)
+  price            Float
+  allowSwap        Boolean             @default(false)
+  location         String
+  status           LaptopListingStatus @default(ACTIVE)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  incomingOffers   LaptopOffer[]       @relation("TargetLaptopOffers")
+  outgoingSwapOffers LaptopOffer[]     @relation("OfferedLaptopOffers")
+  @@index([sellerId, status])
+  @@index([status, createdAt])
+}
+
+model LaptopOffer {
+  id              String            @id @default(cuid())
+  target          LaptopListing     @relation("TargetLaptopOffers", fields: [targetId], references: [id])
+  targetId        String
+  buyer           User              @relation("LaptopOffersByBuyer", fields: [buyerId], references: [id])
+  buyerId         String
+  offered         LaptopListing?    @relation("OfferedLaptopOffers", fields: [offeredId], references: [id])
+  offeredId       String?
+  type            LaptopOfferType
+  // BUY: buyer's cash bid; SWAP: + amount buyer pays target seller, - amount seller pays buyer.
+  amount          Float
+  note            String            @default("")
+  status          LaptopOfferStatus @default(PENDING)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  @@index([targetId, status])
+  @@index([buyerId, status])
 }

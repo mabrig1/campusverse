@@ -105,3 +105,12 @@ Once running, navigate to the local frontend address (typically `http://localhos
 2. Enter a mock 11-digit number in the **NIN** or **BVN** forms and submit.
 3. Click **Verify Selfie** to trigger the face matching comparison algorithm.
 4. Observe how your **Trust Score** dial dynamically increases as you complete each step (now persisted server-side), leveling up your profile tier from "Unverified" to "Trusted Trader".
+
+
+## Laptop Exchange — buy, sell & swap (new feature)
+
+The **Laptops** section supports authenticated listings with specifications, seller-declared device condition, battery health, known faults, lock-check declaration, ownership declaration and campus location. Logged-in users can send cash offers or offer their own active laptop listing as a swap with a signed cash top-up. Sellers can accept or decline offers; buyers may withdraw pending offers. Owners can pause/close listings. Public users can browse and search.
+
+**Critical safety limits:** None of these fields represents independent proof of ownership, blacklist clearance, battery diagnosis, organisational lock clearance or a professional inspection. An accepted offer is only an agreement to discuss and physically inspect; it never transfers money, ownership, or uses the existing wallet/escrow. Do not send an unverified transfer, expose full laptop serial numbers, or hand over a laptop before bank-side confirmation. The existing IMEI demo applies to phones, NOT laptop serials. A real verifier, moderation, rate limiting and protected payment workflow require separate implementation and review before transaction automation.
+
+Database: `cd backend && npx prisma migrate deploy && npx prisma generate` on a configured non-production PostgreSQL DB after review. Routes: `GET /api/laptops`, `GET /api/laptops/mine`, `GET /api/laptops/offers`, `POST /api/laptops`, `PATCH /api/laptops/:id/status`, `POST /api/laptops/:id/offers`, `PATCH /api/laptops/offers/:id`. No production migration has been applied by this pull request.
