@@ -1,0 +1,20 @@
+import { readFileSync, existsSync } from "node:fs";
+import assert from "node:assert/strict";
+
+const parse = file => JSON.parse(readFileSync(file, "utf8"));
+const edge = parse("workers/edge-api/wrangler.jsonc");
+const staticPreview = parse("frontend/wrangler.jsonc");
+assert.equal(edge.main, "./src/index.js");
+assert.equal(edge.workers_dev, true);
+assert.equal(edge.vars.UPSTREAM_ORIGIN, "https://campusverse-backend.vercel.app");
+assert.equal(edge.routes, undefined, "Never bind unreviewed Worker to production DNS");
+assert.equal(staticPreview.workers_dev, true);
+assert.equal(staticPreview.routes, undefined);
+assert.equal(staticPreview.assets.directory, "./dist");
+assert.equal(staticPreview.assets.not_found_handling, "single-page-application");
+assert(existsSync("frontend/public/_headers"));
+const headers = readFileSync("frontend/public/_headers", "utf8");
+assert.match(headers, /Content-Security-Policy:/);
+assert.match(headers, /\/assets\/\*[\s\S]+immutable/);
+assert.match(headers, /\/index\.html[\s\S]+no-store/);
+console.log("Cloudflare staging Worker configurations validated without credentials.");

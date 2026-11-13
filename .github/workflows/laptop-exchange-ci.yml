@@ -15,6 +15,9 @@ on:
       - 'backend/src/owner-managed-launch.js'
       - 'frontend/**'
       - '.github/workflows/laptop-exchange-ci.yml'
+      - '.github/workflows/cloudflare-preview.yml'
+      - 'workers/**'
+      - 'docs/cloudflare-worker-rollout.md'
 permissions:
   contents: read
 jobs:
@@ -61,6 +64,11 @@ jobs:
           node --check backend/src/owner-managed-launch.js
       - name: Ownership encryption and serial fingerprint tests
         run: npm run test --workspace=backend
+      - name: Cloudflare Worker safety and config tests
+        run: |
+          node --check workers/edge-api/src/index.js
+          node --test workers/edge-api/src/index.test.js
+          node workers/edge-api/validate-config.mjs
       - name: Swap calculator unit tests
         run: npm run test --workspace=frontend
       - name: Frontend production build

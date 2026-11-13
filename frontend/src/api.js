@@ -1,5 +1,6 @@
 // Vercel hosts the backend now; Railway is no longer required.
-// VITE_API_URL can override this in a deployment environment.
+// VITE_API_URL may opt into a reviewed Cloudflare gateway at https://edge-api.campusverse.store/api.
+// Keep it unset during staging to continue using the Vercel API origin.
 const API_BASE = (import.meta.env.VITE_API_URL || "https://campusverse-backend.vercel.app/api").replace(/\/$/, "");
 
 let authToken = null;
