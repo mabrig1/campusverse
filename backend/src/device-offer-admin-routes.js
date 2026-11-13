@@ -2,10 +2,11 @@ import { z } from "zod";
 import { prisma } from "./db.js";
 import { requireAdminAuth } from "./auth.js";
 import { requireTradingOwner } from "./trading-owner.js";
+import { getPersonalStoreOwnerId, isStoreStock, PERSONAL_STORE_ONLY } from "./store-pilot.js";
 
 const handler = fn => (req,res,next) => Promise.resolve(fn(req,res)).catch(next);
 const schema = z.object({
-  action: z.enum(["ADMIN_APPROVED","REJECTED_BY_ADMIN","COMPLETED","DISPUTED"]),
+  action: z.enum(["ADMIN_APPROVED","ACCEPTED","REJECTED_BY_ADMIN","COMPLETED","DISPUTED"]),
   note: z.string().trim().min(12).max(600),
   inspectionConfirmed: z.boolean().default(false),
   paymentConfirmed: z.boolean().default(false),
@@ -29,9 +30,16 @@ export function registerDeviceOfferAdminRoutes(app) {
     const { action, note, inspectionConfirmed, paymentConfirmed, handoverConfirmed } = parsed.data;
     const offer = await prisma.laptopOffer.findUnique({ where: { id: req.params.id }, include: includes });
     if (!offer) return res.status(404).json({ error: "Offer not found" });
-    if ((action === "ADMIN_APPROVED" || action === "COMPLETED") &&
+    if (PERSONAL_STORE_ONLY) {
+      const ownerId = await getPersonalStoreOwnerId();
+      if (!isStoreStock(offer.target, ownerId))
+        return res.status(409).json({ error: "You can only manage transactions involving your acquired CampusVerse shop stock" });
+    }
+    if ((action === "ADMIN_APPROVED" || action === "COMPLETED" || action === "ACCEPTED") &&
         (!available(offer.target) || (offer.type === "SWAP" && (!available(offer.offered) || offer.offered.sellerId !== offer.buyerId))))
       return res.status(409).json({ error: "One or both devices are not approved or are no longer available" });
+    if (action === "ACCEPTED" && !(PERSONAL_STORE_ONLY && ["PENDING","ADMIN_APPROVED"].includes(offer.status)))
+      return res.status(409).json({ error: "Only the owner can directly accept an active offer on store stock" });
     if (action === "ADMIN_APPROVED" && offer.status !== "PENDING")
       return res.status(409).json({ error: "Only newly submitted offers can be owner-approved" });
     if (action === "COMPLETED") {
@@ -57,6 +65,28 @@ export function registerDeviceOfferAdminRoutes(app) {
       if (action === "COMPLETED") {
         const ids = [offer.targetId, ...(offer.offeredId ? [offer.offeredId] : [])];
         await tx.laptopListing.updateMany({ where: { id: { in: ids } }, data: { status: "CLOSED" } });
+        // On a completed swap, the buyer physically hands in their reviewed
+        // device as part payment. Record it as newly acquired store stock.
+        if (offer.type === "SWAP" && offer.offered) {
+          const incoming = await tx.laptopListing.findUnique({ where: { id: offer.offeredId } });
+          if (!incoming || incoming.ownershipStatus !== "REVIEWED" || incoming.storeInventory ||
+              incoming.sellerId !== offer.buyerId)
+            throw new Error("Swap trade-in verification changed; completion cancelled");
+          await tx.laptopListing.create({data:{
+            sellerId: req.userId, deviceType: incoming.deviceType, brand: incoming.brand,
+            model: incoming.model, processor: incoming.processor, ramGb: incoming.ramGb,
+            storageGb: incoming.storageGb, storageType: incoming.storageType,
+            condition: incoming.condition, batteryHealth: incoming.batteryHealth,
+            faults: incoming.faults, description: incoming.description, imageUrl: incoming.imageUrl,
+            serialLast4: incoming.serialLast4, serialFingerprint: incoming.serialFingerprint,
+            lockStatus: incoming.lockStatus, ownershipDeclared: true, ownershipStatus: "REVIEWED",
+            ownershipReviewedAt: new Date(), identifierMatchedAt: incoming.identifierMatchedAt,
+            identifierMatchedBy: incoming.identifierMatchedBy,
+            price: incoming.price, allowSwap: incoming.allowSwap, location: incoming.location,
+            storeInventory: true, storeAcquiredAt: new Date(), originListingId: incoming.id,
+            status: "PAUSED", // Owner prices and inspects the trade-in before public resale.
+          }});
+        }
         await tx.laptopOffer.updateMany({ where: {
           id: { not: offer.id }, status: { in: ["PENDING","ADMIN_APPROVED"] },
           OR: [{ targetId: { in: ids } }, { offeredId: { in: ids } }],

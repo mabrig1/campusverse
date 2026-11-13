@@ -15,6 +15,7 @@ import { registerLaptopRoutes } from "./src/laptop-routes.js";
 import { registerLaptopOwnershipRoutes } from "./src/laptop-ownership-routes.js";
 import { registerSellerIntentRoutes } from "./src/seller-intent-routes.js";
 import { registerDeviceOfferAdminRoutes } from "./src/device-offer-admin-routes.js";
+import { registerPersonalStoreRoutes } from "./src/personal-store-routes.js";
 import { ownerManagedGuard, ownerManagedLaunch } from "./src/owner-managed-launch.js";
 import { signToken, requireAuth, optionalAuth } from "./src/auth.js";
 import { verifyGoogleIdToken, GoogleAuthNotConfiguredError } from "./src/google-auth.js";
@@ -883,6 +884,7 @@ registerLaptopRoutes(app);
 registerLaptopOwnershipRoutes(app);
 registerSellerIntentRoutes(app);
 registerDeviceOfferAdminRoutes(app);
+registerPersonalStoreRoutes(app);
 
 // Catches anything that reaches here — including async rejections forwarded
 // by express-async-errors — so a bug always returns a fast, clean JSON 500

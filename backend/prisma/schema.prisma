@@ -312,6 +312,7 @@ model LaptopListing {
   @@index([ownershipStatus])
   @@index([sellerId, status])
   @@index([status, createdAt])
+  @@index([storeInventory, status])
 }
 
 model LaptopOffer {
@@ -434,4 +435,5 @@ model StoreIntakeQuote {
   agreedAt DateTime?
   acquiredAt DateTime?
   handoverNote String?
+  @@index([status])
 }

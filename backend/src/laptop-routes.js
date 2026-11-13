@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { prisma } from "./db.js";
 import { requireAuth } from "./auth.js";
+import { getPersonalStoreOwnerId, isStoreStock, PERSONAL_STORE_ONLY, storeNotice } from "./store-pilot.js";
 import { evidenceKey, normalizedDeviceIdentifier, serialFingerprint } from "./laptop-ownership-crypto.js";
 
 const amount = z.number().finite().min(-100_000_000).max(100_000_000);
@@ -35,11 +36,12 @@ const decisionSchema = z.object({ status: z.enum(["ACCEPTED", "DECLINED", "WITHD
 const sellerName = { seller: { select: { id: true, name: true } } };
 const ownerView = {
   seller: { select: { id: true, name: true } },
+  storeQuote: { select: { id: true, price: true, status: true, note: true, offeredAt: true, agreedAt: true, acquiredAt: true } },
   ownershipEvidence: { select: { documentType: true, uploadedAt: true, byteLength: true } },
   sellerVideoEvidence: { select: { uploadedAt: true, mimeType: true, byteLength: true } },
 };
 // Never publish or return serial fingerprints, private reviewer comments or proof documents.
-const withoutPrivateFields = ({ serialFingerprint, ownershipReviewNote, ...safe }) => safe;
+const withoutPrivateFields = ({ serialFingerprint, ownershipReviewNote, identifierMatchedBy, ...safe }) => safe;
 const isReviewed = (item) => item.status === "ACTIVE" && item.ownershipStatus === "REVIEWED";
 const offerIncludes = {
   buyer: { select: { id: true, name: true } },
@@ -56,9 +58,14 @@ export function registerLaptopRoutes(app) {
     const condition = String(req.query.condition || "");
     if (condition && !["EXCELLENT", "GOOD", "FAIR", "NEEDS_REPAIR"].includes(condition))
       return res.status(400).json({ error: "Invalid condition" });
+    const ownerId = PERSONAL_STORE_ONLY ? await getPersonalStoreOwnerId() : null;
+    // If owner account hasn't been configured, fail closed: never show student
+    // submissions as a fallback storefront.
+    if (PERSONAL_STORE_ONLY && !ownerId) return res.status(503).json({ error: "CampusVerse store is not configured for launch" });
     const where = {
       status: "ACTIVE",
       ownershipStatus: "REVIEWED",
+      ...(PERSONAL_STORE_ONLY ? { sellerId: ownerId, storeInventory: true, storeAcquiredAt: { not: null } } : {}),
       ...(condition ? { condition } : {}),
       ...(["PHONE", "LAPTOP"].includes(req.query.deviceType) ? { deviceType: req.query.deviceType } : {}),
       ...(req.query.swap === "true" ? { allowSwap: true } : {}),
@@ -72,13 +79,15 @@ export function registerLaptopRoutes(app) {
     const items = await prisma.laptopListing.findMany({
       where, include: sellerName, orderBy: { createdAt: "desc" }, take: 40,
     });
-    res.json({ items: items.map(withoutPrivateFields) });
+    res.setHeader("Cache-Control", "private, no-store, max-age=0");
+    res.json({ items: items.map(withoutPrivateFields), shopModel: PERSONAL_STORE_ONLY ? "ONE_CAMPUSVERSE_STORE" : "MARKETPLACE" });
   }));
 
   app.get("/api/laptops/mine", requireAuth, asyncRoute(async (req, res) => {
     const items = await prisma.laptopListing.findMany({
       where: { sellerId: req.userId }, include: ownerView, orderBy: { createdAt: "desc" }, take: 100,
     });
+    res.setHeader("Cache-Control", "private, no-store, max-age=0");
     res.json({ items: items.map(withoutPrivateFields) });
   }));
 
@@ -87,6 +96,7 @@ export function registerLaptopRoutes(app) {
       where: { OR: [{ buyerId: req.userId }, { target: { is: { sellerId: req.userId } }, status: { not: "PENDING" } }] },
       include: offerIncludes, orderBy: { createdAt: "desc" }, take: 100,
     });
+    res.setHeader("Cache-Control", "private, no-store, max-age=0");
     res.json({ items });
   }));
 
@@ -147,6 +157,11 @@ export function registerLaptopRoutes(app) {
     if (!parsed.success) return fail(res, parsed);
     const { type, offeredId, amount: offerAmount, note } = parsed.data;
     const target = await prisma.laptopListing.findUnique({ where: { id: req.params.id } });
+    if (PERSONAL_STORE_ONLY) {
+      const ownerId = await getPersonalStoreOwnerId();
+      if (!isStoreStock(target, ownerId))
+        return res.status(404).json({ error: "Only confirmed CampusVerse store inventory can receive buying and swapping offers" });
+    }
     if (!target || !isReviewed(target)) return res.status(404).json({ error: "Listing unavailable until ownership documents have been reviewed" });
     if (target.sellerId === req.userId) return res.status(403).json({ error: "You cannot bid on your own laptop" });
     if (type === "BUY" && (offeredId || offerAmount < 1000))
@@ -183,8 +198,12 @@ export function registerLaptopRoutes(app) {
     if (parsed.data.status === "WITHDRAWN" ? !isBuyer : !isSeller)
       return res.status(403).json({ error: "Not authorised for this offer action" });
     if (!["PENDING", "ADMIN_APPROVED"].includes(offer.status)) return res.status(409).json({ error: "Offer is no longer pending" });
+    if (PERSONAL_STORE_ONLY && parsed.data.status === "ACCEPTED")
+      return res.status(403).json({ error: "Only the CampusVerse owner trading desk can accept store sales" });
     if (parsed.data.status === "ACCEPTED" && (offer.status !== "ADMIN_APPROVED" || !isSeller))
       return res.status(409).json({ error: "The marketplace owner must approve the offer before the seller can agree" });
+    if (PERSONAL_STORE_ONLY && parsed.data.status === "DECLINED")
+      return res.status(403).json({ error: "Only the CampusVerse owner trading desk manages store offers" });
     if (parsed.data.status === "DECLINED" && (offer.status !== "ADMIN_APPROVED" || !isSeller))
       return res.status(409).json({ error: "Only owner-approved offers can be declined by the seller" });
     if (parsed.data.status === "ACCEPTED" &&
