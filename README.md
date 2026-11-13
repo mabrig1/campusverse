@@ -105,3 +105,22 @@ Once running, navigate to the local frontend address (typically `http://localhos
 2. Enter a mock 11-digit number in the **NIN** or **BVN** forms and submit.
 3. Click **Verify Selfie** to trigger the face matching comparison algorithm.
 4. Observe how your **Trust Score** dial dynamically increases as you complete each step (now persisted server-side), leveling up your profile tier from "Unverified" to "Trusted Trader".
+
+
+## Laptop Exchange — buy, sell & swap (new feature)
+
+The **Laptops** section supports authenticated listings with specifications, seller-declared device condition, battery health, known faults, lock-check declaration, ownership declaration and campus location. Logged-in users can send cash offers or offer their own active laptop listing as a swap with a signed cash top-up. Sellers can accept or decline offers; buyers may withdraw pending offers. Owners can pause/close listings. Public users can browse and search.
+
+**Critical safety limits:** None of these fields represents independent proof of ownership, blacklist clearance, battery diagnosis, organisational lock clearance or a professional inspection. An accepted offer is only an agreement to discuss and physically inspect; it never transfers money, ownership, or uses the existing wallet/escrow. Do not send an unverified transfer, expose full laptop serial numbers, or hand over a laptop before bank-side confirmation. The existing IMEI demo applies to phones, NOT laptop serials. A real verifier, moderation, rate limiting and protected payment workflow require separate implementation and review before transaction automation.
+
+Database: `cd backend && npx prisma migrate deploy && npx prisma generate` on a configured non-production PostgreSQL DB after review. Routes: `GET /api/laptops`, `GET /api/laptops/mine`, `GET /api/laptops/offers`, `POST /api/laptops`, `PATCH /api/laptops/:id/status`, `POST /api/laptops/:id/offers`, `PATCH /api/laptops/offers/:id`. No production migration has been applied by this pull request.
+
+
+### Proof of ownership and safety gate (November 2026)
+Every new laptop listing requires the full device serial on submission; only a **keyed HMAC fingerprint** plus four-character suffix is persisted. This enables private duplicate-listing detection without publishing a complete serial. Seller supplies a **JPEG or PNG photograph (maximum 2 MB)** of a purchase receipt, bill of sale or organisation release. Do **not** submit NIN, BVN, home addresses, financial credentials or unrelated ID documents. Receipts are stored as **AES-256-GCM encrypted binary data in the PostgreSQL database**, never as public URLs. A **32-byte base64 secret** `LAPTOP_PROOF_ENCRYPTION_KEY_BASE64` is required server-side; missing configuration fails closed. Preserve/backup this key securely: losing it makes already-uploaded documents unreadable. Consider lifecycle retention, audit access and malware scanning before production.
+
+A listing begins `NOT_SUBMITTED`, becomes `PENDING` after upload, and is only publicly visible or eligible for buy/swap offers when an administrator records `REVIEWED`. Admin approval requires checking the uploaded document, serial suffix and lawful transfer history; it is **document review**, **not a stolen-goods clearance guarantee**. Review actions are audit logged. Buyers can report suspected stolen devices; these are immediately quarantined (`FLAGGED`) and pending offers invalidated, but reports can be false and must be evaluated before discipline or permanent action. Deleting or replacing proof removes an existing approval. Only admin-scoped JWTs can download private documents or approve/reject.
+
+**APIs:** `POST/DELETE /api/laptops/:id/ownership-proof`, `POST /api/laptops/:id/safety-report`, and administrator `GET /api/admin/v2/laptop-ownership`, `GET /api/admin/v2/laptop-reports`, `GET /api/admin/v2/laptop-ownership/:id/document`, `POST /api/admin/v2/laptop-ownership/:id/review`, `POST /api/admin/v2/laptop-reports/:id/resolve`. Upload requires `Content-Type: application/octet-stream` and `X-Ownership-Document-Type` in `PURCHASE_RECEIPT`, `BILL_OF_SALE`, `ORGANISATION_RELEASE`. Evidence is NOT available through normal marketplace APIs.
+
+**Important:** Do not merge or run these migrations against production until approved; the new database migration is intentionally unexecuted. A production process still needs privacy notice, retention/deletion schedule, trained reviewers, access logging, upload malware checks, appeals and lawful escalation for confirmed stolen property.

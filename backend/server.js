@@ -11,6 +11,8 @@ import bcrypt from "bcryptjs";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { prisma } from "./src/db.js";
+import { registerLaptopRoutes } from "./src/laptop-routes.js";
+import { registerLaptopOwnershipRoutes } from "./src/laptop-ownership-routes.js";
 import { signToken, requireAuth, optionalAuth } from "./src/auth.js";
 import { verifyGoogleIdToken, GoogleAuthNotConfiguredError } from "./src/google-auth.js";
 import { chargeWallet, creditWallet, InsufficientFundsError } from "./src/wallet.js";
@@ -871,6 +873,10 @@ const mockDirectory = [
 
 app.get("/api/services", (req, res) => res.json(mockServices));
 app.get("/api/directory", (req, res) => res.json(mockDirectory));
+
+// Dedicated buy/sell/swap exchange; no funds or title move when an offer is accepted.
+registerLaptopRoutes(app);
+registerLaptopOwnershipRoutes(app);
 
 // Catches anything that reaches here — including async rejections forwarded
 // by express-async-errors — so a bug always returns a fast, clean JSON 500

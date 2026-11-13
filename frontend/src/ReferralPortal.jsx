@@ -60,11 +60,54 @@ export default function ReferralPortal() {
         </section>
         <section style={{display:"grid",gridTemplateColumns:"minmax(0,1.6fr) minmax(280px,1fr)",gap:18}}>
           <div style={card}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><h2 style={{margin:0,fontSize:19}}>Referral activity</h2><p style={{color:"#6c827b",fontSize:13}}>Track every referred customer.</p></div><button style={button} onClick={refresh}>Refresh</button></div>
-            <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}><thead><tr>{["Person","Status","Date","Commission"].map(x=><th key={x} style={{textAlign:"left",padding:10,color:"#7b918a",borderBottom:"1px solid #e4eee9}}>{x}</th>)}</tr></thead><tbody>{data.referrals.map(r=><tr key={r.id}><td style={td}><b>{r.referred_name}</b><small style={{display:"block",color:"#7b918a"}}>{r.referred_email}</small></td><td style={td}><span style={badge(r.status)}>{r.status}</span></td><td style={td}>{new Date(r.created_at).toLocaleDateString()}</td><td style={td}>See ledger</td></tr>)}{!data.referrals.length&&<tr><td colSpan="4" style={{padding:28,textAlign:"center",color:"#7b918a"}}>No referrals yet.</td></tr>}</tbody></table></div>
+            <div style={{overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                <thead><tr>{["Person","Status","Date","Commission"].map(x => (
+                  <th key={x} style={{textAlign:"left",padding:10,color:"#7b918a",borderBottom:"1px solid #e4eee9"}}>{x}</th>
+                ))}</tr></thead>
+                <tbody>
+                  {data.referrals.map(r => (
+                    <tr key={r.id}>
+                      <td style={td}><b>{r.referred_name}</b><small style={{display:"block",color:"#7b918a"}}>{r.referred_email}</small></td>
+                      <td style={td}><span style={badge(r.status)}>{r.status}</span></td>
+                      <td style={td}>{new Date(r.created_at).toLocaleDateString()}</td>
+                      <td style={td}>See ledger</td>
+                    </tr>
+                  ))}
+                  {!data.referrals.length && (
+                    <tr><td colSpan="4" style={{padding:28,textAlign:"center",color:"#7b918a"}}>No referrals yet.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
           <div style={card}><h2 style={{margin:0,fontSize:19}}>How it works</h2>{[["01","Share","Use your unique link."],["02","Serve","Connect a real campus need to CampusVerse."],["03","Qualify","The order is verified by the platform."],["04","Earn","Approved commissions enter payout." ]].map(([n,t,d])=><div key={n} style={{display:"flex",gap:12,marginTop:18}}><b style={{color:"#07966c"}}>{n}</b><div><strong>{t}</strong><p style={{margin:"4px 0",color:"#6c827b",fontSize:13}}>{d}</p></div></div>)}</div>
         </section>
-        <section style={{...card,marginTop:18}}><h2 style={{margin:0,fontSize:19}}>Commission ledger</h2><p style={{color:"#6c827b",fontSize:13}}>Pending is not the same as paid.</p><div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}><thead><tr>{["Referral","Source","Order value","Commission","Status"].map(x=><th key={x} style={{textAlign:"left",padding:10,color:"#7b918a"}}>{x}</th>)}</tr></thead><tbody>{data.commissions.map(c=><tr key={c.id}><td style={td}>{c.referred_name||c.code}</td><td style={td}>{c.source_type}</td><td style={td}>{money(c.base_amount)}</td><td style={td}><b>{money(c.commission_amount)}</b></td><td style={td}><span style={badge(c.status)}>{c.status}</span></td></tr>)}{!data.commissions.length&&<tr><td colSpan="5" style={{padding:28,textAlign:"center",color:"#7b918a"}}>No commission entries yet.</td></tr>}</tbody></table></div></section>
+        <section style={{...card,marginTop:18}}>
+          <h2 style={{margin:0,fontSize:19}}>Commission ledger</h2>
+          <p style={{color:"#6c827b",fontSize:13}}>Pending is not the same as paid.</p>
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+              <thead><tr>{["Referral","Source","Order value","Commission","Status"].map(x => (
+                <th key={x} style={{textAlign:"left",padding:10,color:"#7b918a"}}>{x}</th>
+              ))}</tr></thead>
+              <tbody>
+                {data.commissions.map(c => (
+                  <tr key={c.id}>
+                    <td style={td}>{c.referred_name || c.code}</td>
+                    <td style={td}>{c.source_type}</td>
+                    <td style={td}>{money(c.base_amount)}</td>
+                    <td style={td}><b>{money(c.commission_amount)}</b></td>
+                    <td style={td}><span style={badge(c.status)}>{c.status}</span></td>
+                  </tr>
+                ))}
+                {!data.commissions.length && (
+                  <tr><td colSpan="5" style={{padding:28,textAlign:"center",color:"#7b918a"}}>No commission entries yet.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
       </>}
     </main>
   </div>;

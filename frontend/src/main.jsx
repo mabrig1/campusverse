@@ -16,10 +16,11 @@ function CampusVerseRoot() {
   if (path.startsWith('/admin')) return <AdminPortal />
 
   const [storefront, setStorefront] = useState(true)
+  const [initialTab, setInitialTab] = useState('dashboard')
   return storefront ? (
-    <CampusVerseStorefront onLogin={() => setStorefront(false)} />
+    <CampusVerseStorefront onLogin={(tab = 'dashboard') => { setInitialTab(tab); setStorefront(false) }} />
   ) : (
-    <App />
+    <App initialTab={initialTab} />
   )
 }
 

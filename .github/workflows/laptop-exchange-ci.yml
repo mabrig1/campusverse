@@ -1,0 +1,42 @@
+name: Laptop Exchange validation
+on:
+  push:
+    branches:
+      - feat/campusverse-laptop-exchange-20261112
+  pull_request:
+    paths:
+      - 'backend/prisma/**'
+      - 'backend/src/laptop-routes.js'
+      - 'backend/src/laptop-ownership-*.js'
+      - 'backend/server.js'
+      - 'frontend/**'
+      - '.github/workflows/laptop-exchange-ci.yml'
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://campusverse:campusverse@localhost:5432/campusverse?schema=public
+      JWT_SECRET: laptop-ci-only-not-a-production-secret
+      LAPTOP_PROOF_ENCRYPTION_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - name: Install pinned workspace dependencies
+        run: npm ci
+      - name: Prisma schema validation (no DB mutation)
+        run: cd backend && npx prisma validate --schema prisma/schema.prisma
+      - name: Backend syntax
+        run: |
+          node --check backend/server.js
+          node --check backend/src/laptop-routes.js
+          node --check backend/src/laptop-ownership-routes.js
+          node --check backend/src/laptop-ownership-crypto.js
+      - name: Ownership encryption and serial fingerprint tests
+        run: npm run test --workspace=backend
+      - name: Swap calculator unit tests
+        run: npm run test --workspace=frontend
+      - name: Frontend production build
+        run: npm run build --workspace=frontend
