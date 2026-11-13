@@ -57,7 +57,7 @@ export default function DeviceTradingAdmin() {
     setBusy(true); setError("");
     try {
       const blob = await api.adminDownloadLaptopEvidence(row.id);
-      const ext = row.ownershipEvidence?.mimeType === "image/png" ? "png" : "jpg";
+      const ext = row.ownershipEvidence?.mimeType === "application/pdf" ? "pdf" : row.ownershipEvidence?.mimeType === "image/png" ? "png" : "jpg";
       const url = URL.createObjectURL(blob), a = document.createElement("a");
       a.href = url; a.download = "private-ownership-" + row.id + "." + ext;
       document.body.appendChild(a); a.click(); a.remove();

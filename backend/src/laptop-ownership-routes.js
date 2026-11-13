@@ -4,7 +4,7 @@ import { z } from "zod";
 import { prisma } from "./db.js";
 import { requireAuth, requireAdminAuth } from "./auth.js";
 import { requireTradingOwner } from "./trading-owner.js";
-import { MAX_EVIDENCE_BYTES, PROOF_TYPES, evidenceKey, recognizedImage, encryptEvidence, decryptEvidence, normalizedDeviceIdentifier, serialFingerprint } from "./laptop-ownership-crypto.js";
+import { MAX_EVIDENCE_BYTES, PROOF_TYPES, evidenceKey, recognizedOwnershipDocument, encryptEvidence, decryptEvidence, normalizedDeviceIdentifier, serialFingerprint } from "./laptop-ownership-crypto.js";
 
 const safe = fn => (req, res, next) => Promise.resolve(fn(req, res)).catch(next);
 const invalid = (res, parsed) => res.status(400).json({ error: parsed.error.issues[0]?.message || "Invalid input" });
@@ -48,9 +48,9 @@ export function registerLaptopOwnershipRoutes(app) {
       const type = String(req.get("x-ownership-document-type") || "").trim();
       if (!PROOF_TYPES.includes(type)) return res.status(400).json({ error: "Choose a supported ownership document type" });
       if (!Buffer.isBuffer(req.body) || !req.body.length || req.body.length > MAX_EVIDENCE_BYTES)
-        return res.status(400).json({ error: "Upload a PNG/JPEG receipt image smaller than 2 MB" });
-      const mimeType = recognizedImage(req.body);
-      if (!mimeType) return res.status(415).json({ error: "Only PNG and JPEG receipt photographs are accepted" });
+        return res.status(400).json({ error: "Upload a JPEG, PNG or PDF ownership document smaller than 2 MB" });
+      const mimeType = recognizedOwnershipDocument(req.body);
+      if (!mimeType) return res.status(415).json({ error: "Only JPEG, PNG and PDF ownership documents are accepted" });
       const listing = await prisma.laptopListing.findUnique({ where: { id: req.params.id }, select: { sellerId: true, status: true, ownershipStatus: true } });
       if (!listing) return res.status(404).json({ error: "Laptop listing not found" });
       if (listing.sellerId !== req.userId) return res.status(403).json({ error: "Only the listing owner can submit a document" });
@@ -186,7 +186,7 @@ export function registerLaptopOwnershipRoutes(app) {
     res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Content-Type", "application/octet-stream");
-    res.setHeader("Content-Disposition", "attachment; filename=\"ownership-evidence." + (proof.mimeType === "image/png" ? "png" : "jpg") + "\"");
+    res.setHeader("Content-Disposition", "attachment; filename=\"ownership-evidence." + (proof.mimeType === "application/pdf" ? "pdf" : proof.mimeType === "image/png" ? "png" : "jpg") + "\"");
     res.send(bytes);
   }));
 

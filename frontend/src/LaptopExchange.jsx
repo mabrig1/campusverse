@@ -102,8 +102,8 @@ export default function LaptopExchange({ user }) {
       price: Number(form.price),
       batteryHealth: form.batteryHealth === '' ? null : Number(form.batteryHealth),
     };
-    if (!proofFile || !['image/jpeg', 'image/png'].includes(proofFile.type) || proofFile.size > 2 * 1024 * 1024) {
-      setError('Attach a JPEG/PNG photograph of the purchase receipt or lawful transfer document (under 2 MB).');
+    if (!proofFile || !['image/jpeg', 'image/png', 'application/pdf'].includes(proofFile.type) || proofFile.size > 2 * 1024 * 1024) {
+      setError('Attach a JPEG, PNG or PDF of the purchase receipt or lawful transfer document (under 2 MB).');
       return;
     }
     if (await transact(async () => {
@@ -143,8 +143,8 @@ export default function LaptopExchange({ user }) {
   }
   async function uploadProofForListing(id) {
     const file = proofFiles[id];
-    if (!file || !['image/jpeg', 'image/png'].includes(file.type) || file.size > 2 * 1024 * 1024) {
-      setError('Select a PNG/JPEG photograph smaller than 2 MB.'); return;
+    if (!file || !['image/jpeg', 'image/png', 'application/pdf'].includes(file.type) || file.size > 2 * 1024 * 1024) {
+      setError('Select a JPEG, PNG or PDF document smaller than 2 MB.'); return;
     }
     if (await transact(() => api.uploadLaptopOwnershipProof(id, file, proofTypes[id] || 'PURCHASE_RECEIPT'),
       'Document submitted privately; listing hidden pending administrator review.')) {
@@ -282,10 +282,10 @@ export default function LaptopExchange({ user }) {
             </div>
             <div className="cv-laptop-proof-box">
               <h4>Step 1 — Private proof of ownership</h4>
-              <p>Attach a clear photo of an original purchase receipt, a signed bill of sale, or an official employer/school release. Show the laptop serial suffix and legitimate transfer history. Redact phone numbers, home address, payment details, NIN and BVN. No proof is shown publicly.</p>
+              <p>Attach a clear document or photo of an original purchase receipt, a signed bill of sale, or an official employer/school release. Show the laptop serial suffix and legitimate transfer history. Redact phone numbers, home address, payment details, NIN and BVN. No proof is shown publicly.</p>
               <div className="cv-laptop-fields">
                 <label><span>Document type</span><select value={proofType} onChange={e => setProofType(e.target.value)}><option value="PURCHASE_RECEIPT">Original purchase receipt</option><option value="BILL_OF_SALE">Signed bill of sale / previous owner transfer</option><option value="ORGANISATION_RELEASE">Official organisation release</option></select></label>
-                <label><span>Receipt / transfer photo (JPEG or PNG, 2 MB maximum)</span><input type="file" required accept="image/jpeg,image/png" onChange={e => setProofFile(e.target.files?.[0] || null)} /></label>
+                <label><span>Ownership receipt or signed transfer (JPEG, PNG or PDF; 2 MB maximum)</span><input type="file" required accept="image/jpeg,image/png,application/pdf" onChange={e => setProofFile(e.target.files?.[0] || null)} /></label>
               </div>
             </div>
             <div className="cv-laptop-consent">
@@ -313,7 +313,7 @@ export default function LaptopExchange({ user }) {
                 {!item.sellerVideoEvidence && <p><b>📹 Seller video still required:</b> Record a new front-camera authorisation clip before the trading desk can approve this listing.</p>}
                 {!['FLAGGED','REVOKED'].includes(item.ownershipStatus) && item.status !== 'CLOSED' && <div className="cv-laptop-proof-upload">
                   <label><span>Document type</span><select value={proofTypes[item.id] || 'PURCHASE_RECEIPT'} onChange={e => setProofTypes(p => ({ ...p, [item.id]: e.target.value }))}><option value="PURCHASE_RECEIPT">Purchase receipt</option><option value="BILL_OF_SALE">Bill of sale</option><option value="ORGANISATION_RELEASE">Organisation release</option></select></label>
-                  <label><span>{item.ownershipEvidence ? 'Replace private document' : 'Upload missing ownership proof'}</span><input type="file" accept="image/jpeg,image/png" onChange={e => setProofFiles(p => ({ ...p, [item.id]: e.target.files?.[0] || null }))}/></label>
+                  <label><span>{item.ownershipEvidence ? 'Replace private document' : 'Upload missing ownership proof'}</span><input type="file" accept="image/jpeg,image/png,application/pdf" onChange={e => setProofFiles(p => ({ ...p, [item.id]: e.target.files?.[0] || null }))}/></label>
                   <button disabled={busy || !proofFiles[item.id]} onClick={() => uploadProofForListing(item.id)} type="button" className="cv-laptop-small">Send for review</button>
                   {item.ownershipEvidence && <button disabled={busy} className="cv-laptop-small" type="button" onClick={() => {
                     if (window.confirm('Erase your private evidence? The listing will be removed from public search.')) transact(() => api.removeLaptopOwnershipProof(item.id), 'Private document erased and listing hidden.');

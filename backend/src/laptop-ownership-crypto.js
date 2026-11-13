@@ -38,10 +38,14 @@ export function serialFingerprint(serial, key, deviceType = "LAPTOP") {
   return createHmac("sha256", key).update("campusverse:device:identifier:v2:" + deviceType + ":" + value).digest("hex");
 }
 
-export function recognizedImage(bytes) {
+export function recognizedOwnershipDocument(bytes) {
   if (!Buffer.isBuffer(bytes) || bytes.length < 20 || bytes.length > MAX_EVIDENCE_BYTES) return null;
   const isPng = bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]));
   if (isPng) return "image/png";
+  // A document PDF is accepted as private evidence, never rendered inline.
+  if (bytes.subarray(0,5).toString("ascii") === "%PDF-" &&
+      bytes.subarray(Math.max(0,bytes.length-72)).toString("latin1").includes("%%EOF"))
+    return "application/pdf";
   const isJpeg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff &&
     bytes[bytes.length - 2] === 0xff && bytes[bytes.length - 1] === 0xd9;
   if (isJpeg) return "image/jpeg";
@@ -76,3 +80,6 @@ export function recognizedSellerVideo(bytes) {
 export function sellerVideoAAD(listingId) {
   return "seller-intent-video:" + listingId;
 }
+
+// Legacy alias for existing callers; prefer the document-specific name.
+export const recognizedImage = recognizedOwnershipDocument;

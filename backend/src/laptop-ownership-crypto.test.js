@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
-import { evidenceKey, normalizedSerial, normalizedDeviceIdentifier, serialFingerprint, recognizedImage, encryptEvidence, decryptEvidence, recognizedSellerVideo, sellerVideoAAD, MAX_SELLER_VIDEO_BYTES } from "./laptop-ownership-crypto.js";
+import { evidenceKey, normalizedSerial, normalizedDeviceIdentifier, serialFingerprint, recognizedImage, encryptEvidence, decryptEvidence, recognizedOwnershipDocument, recognizedSellerVideo, sellerVideoAAD, MAX_SELLER_VIDEO_BYTES } from "./laptop-ownership-crypto.js";
 
 test("serial values normalize and get a private, deterministic fingerprint", () => {
   const key = randomBytes(32);
@@ -50,4 +50,11 @@ test("seller selfie video magic signatures and strict size cap", () => {
   const ciphertext = encryptEvidence(bytes, key, sellerVideoAAD("listing-9"));
   assert.deepEqual(decryptEvidence(ciphertext,key,sellerVideoAAD("listing-9")),bytes);
   assert.throws(()=>decryptEvidence(ciphertext,key,"listing-9"), /auth|authenticate|Unsupported|unable/i);
+});
+
+
+test("private ownership evidence accepts a well-formed PDF signature without inline rendering", () => {
+  const doc = Buffer.concat([Buffer.from("%PDF-1.7\n1 0 obj\nendobj\n"),Buffer.from("%%EOF\n")]);
+  assert.equal(recognizedOwnershipDocument(doc),"application/pdf");
+  assert.equal(recognizedOwnershipDocument(Buffer.from("%PDF-1.7\ncontent with no final marker")),null);
 });

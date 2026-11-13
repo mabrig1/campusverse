@@ -69,7 +69,7 @@ export default function CampusVerseStorefront({ onLogin }) {
           <div className="hero-copy">
             <span className="eyebrow">YOUR CAMPUS. YOUR MARKETPLACE. YOUR OPPORTUNITY.</span>
             <h1>Buy. Sell. <em>Swap your phone or laptop.</em></h1>
-            <p>Buy used phones and laptops, sell devices you own, or negotiate a swap. Every listing requires paperwork and your CampusVerse trading desk supervises deal approvals and handovers.</p>
+            <p>Buy used phones and laptops, sell devices you own, or negotiate a swap. Every device seller submits an ownership document and a fresh seller-authorisation selfie video. Your CampusVerse trading desk reviews evidence and supervises deal approvals and handovers.</p>
             <div className="hero-actions">
               <button className="store-primary large" onClick={() => onLogin("laptops")}>Browse phones & laptops →</button>
               <button className="store-outline large" onClick={() => scrollTo("services")}>Academic services & printing</button>
@@ -102,8 +102,8 @@ export default function CampusVerseStorefront({ onLogin }) {
         <section id="laptops" className="store-laptop-teaser">
           <div><span className="eyebrow">MAJOR FEATURE • MANAGED DEVICE MARKET</span>
             <h2>Upgrade a phone or laptop. <em>Trade with care.</em></h2>
-            <p>Buy, sell or swap used phones and laptops with clear specifications, ownership-document review, signed cash top-ups and a supervised handover process.</p>
-            <div className="store-laptop-badges"><span>💻 Real listings</span><span>🔁 Swap offers</span><span>🛡️ Inspection guide</span><span>₦ Fair top-up calculator</span></div>
+            <p>Buy, sell or swap used phones and laptops with clear specifications, ownership-document and private selfie-video review, signed cash top-ups and supervised handover.</p>
+            <div className="store-laptop-badges"><span>💻 Real listings</span><span>📄 Ownership paperwork</span><span>📹 Private seller selfie video</span><span>🔁 Supervised swaps</span></div>
             <button type="button" className="store-primary large" onClick={() => onLogin('laptops')}>Start buying, selling or swapping →</button>
             <small>Documents are reviewed, but theft-free status is not guaranteed. The trading desk must approve all offers and handovers.</small>
           </div>
