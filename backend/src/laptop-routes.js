@@ -129,11 +129,11 @@ export function registerLaptopRoutes(app) {
       });
       if (parsed.data.status !== "ACTIVE") {
         await tx.laptopOffer.updateMany({
-          where: { targetId: existing.id, status: "PENDING" }, data: { status: "DECLINED" },
+          where: { targetId: existing.id, status: { in: ["PENDING", "ADMIN_APPROVED"] } }, data: { status: "DECLINED" },
         });
         // Pending outgoing swaps are no longer valid when the offered laptop is paused/closed.
         await tx.laptopOffer.updateMany({
-          where: { offeredId: existing.id, status: "PENDING" }, data: { status: "WITHDRAWN" },
+          where: { offeredId: existing.id, status: { in: ["PENDING", "ADMIN_APPROVED"] } }, data: { status: "WITHDRAWN" },
         });
       }
       return updated;

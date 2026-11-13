@@ -28,8 +28,8 @@ const metadataSelect = {
 const isMissingKey = error => error.message === "Ownership evidence storage not configured";
 function cancelPendingOffers(tx, id) {
   return Promise.all([
-    tx.laptopOffer.updateMany({ where: { targetId: id, status: "PENDING" }, data: { status: "DECLINED" } }),
-    tx.laptopOffer.updateMany({ where: { offeredId: id, status: "PENDING" }, data: { status: "WITHDRAWN" } }),
+    tx.laptopOffer.updateMany({ where: { targetId: id, status: { in: ["PENDING", "ADMIN_APPROVED"] } }, data: { status: "DECLINED" } }),
+    tx.laptopOffer.updateMany({ where: { offeredId: id, status: { in: ["PENDING", "ADMIN_APPROVED"] } }, data: { status: "WITHDRAWN" } }),
   ]);
 }
 
