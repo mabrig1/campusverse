@@ -63,3 +63,7 @@ Official documentation:
 - https://developers.cloudflare.com/workers/static-assets/
 - https://developers.cloudflare.com/workers/static-assets/headers/
 - https://developers.cloudflare.com/workers/configuration/routing/custom-domains/
+
+## Connected staging preview (API and frontend together)
+
+For the manual GitHub Action, supply the actual Worker URL `https://campusverse-edge-api-preview.<account-subdomain>.workers.dev/api` in the `api_preview_url` field. The job rejects URLs that do not match the expected HTTPS Worker hostname. It deploys and smoke-tests the API Worker first; it then builds React with `VITE_API_URL` pointing at that Worker and adds a strictly scoped staging-only CSP for that exact preview API origin. The default production frontend and backend configurations remain unchanged.

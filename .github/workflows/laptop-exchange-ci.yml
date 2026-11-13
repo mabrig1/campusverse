@@ -68,6 +68,7 @@ jobs:
         run: |
           node --check workers/edge-api/src/index.js
           node --test workers/edge-api/src/index.test.js
+          node --test workers/edge-api/prepare-staging.test.mjs
           node workers/edge-api/validate-config.mjs
       - name: Swap calculator unit tests
         run: npm run test --workspace=frontend
