@@ -70,7 +70,7 @@ export function registerDeviceOfferAdminRoutes(app) {
         if (offer.type === "SWAP" && offer.offered) {
           const incoming = await tx.laptopListing.findUnique({ where: { id: offer.offeredId } });
           if (!incoming || incoming.ownershipStatus !== "REVIEWED" || incoming.storeInventory ||
-              incoming.sellerId !== offer.buyerId)
+              !incoming.identifierMatchedAt || incoming.sellerId !== offer.buyerId)
             throw new Error("Swap trade-in verification changed; completion cancelled");
           await tx.laptopListing.create({data:{
             sellerId: req.userId, deviceType: incoming.deviceType, brand: incoming.brand,

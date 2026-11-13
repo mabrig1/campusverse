@@ -72,6 +72,30 @@ export function registerPersonalStoreRoutes(app) {
     res.json({items:records});
   }));
 
+  app.get("/api/admin/v2/store-inventory",requireAdminAuth,requireTradingOwner,safe(async(req,res)=>{
+    privateHeaders(res);
+    const items=await prisma.laptopListing.findMany({
+      where:{sellerId:req.userId,storeInventory:true},
+      select:{id:true,deviceType:true,brand:true,model:true,price:true,status:true,
+        ownershipStatus:true,serialLast4:true,storeAcquiredAt:true,originListingId:true,
+        condition:true,location:true,createdAt:true},
+      orderBy:{storeAcquiredAt:"desc"},take:200,
+    });
+    res.json({items});
+  }));
+
+  app.patch("/api/admin/v2/store-inventory/:id/status",requireAdminAuth,requireTradingOwner,safe(async(req,res)=>{
+    privateHeaders(res);
+    const parsed=z.object({status:z.enum(["ACTIVE","PAUSED"])}).strict().safeParse(req.body);
+    if(!parsed.success) return inputFail(res,parsed);
+    const updated=await prisma.laptopListing.updateMany({
+      where:{id:req.params.id,sellerId:req.userId,storeInventory:true,status:{in:["ACTIVE","PAUSED"]}},
+      data:{status:parsed.data.status},
+    });
+    if(!updated.count) return res.status(404).json({error:"Store inventory item not available"});
+    res.json({status:parsed.data.status,message:"Only your personal store stock availability was updated."});
+  }));
+
   app.post("/api/admin/v2/store-intake/:id/quote",requireAdminAuth,requireTradingOwner,safe(async(req,res)=>{
     privateHeaders(res);
     const parsed=quoteSchema.safeParse(req.body);
@@ -178,11 +202,12 @@ export function registerPersonalStoreRoutes(app) {
     const parsed=inventoryPriceSchema.safeParse(req.body);
     if(!parsed.success) return inputFail(res,parsed);
     const ownerId=await getPersonalStoreOwnerId();
+    if(!ownerId) return res.status(503).json({error:"Single store owner account not configured"});
     const result=await prisma.laptopListing.updateMany({
-      where:{id:req.params.id,sellerId:ownerId||undefined,storeInventory:true,status:"ACTIVE"},
+      where:{id:req.params.id,sellerId:ownerId,storeInventory:true,status:{in:["ACTIVE","PAUSED"]}},
       data:{price:parsed.data.price},
     });
-    if(!result.count || !ownerId) return res.status(404).json({error:"Owner stock item not found"});
+    if(!result.count) return res.status(404).json({error:"Owner stock item not found"});
     res.json({status:"UPDATED",price:parsed.data.price});
   }));
 }

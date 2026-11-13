@@ -134,6 +134,7 @@ export function registerLaptopRoutes(app) {
     const existing = await prisma.laptopListing.findUnique({ where: { id: req.params.id } });
     if (!existing) return res.status(404).json({ error: "Laptop listing not found" });
     if (existing.sellerId !== req.userId) return res.status(403).json({ error: "Not your listing" });
+    if (existing.status === "CLOSED") return res.status(409).json({ error: "A completed sale or trade-in cannot be reopened as the seller's listing" });
     const item = await prisma.$transaction(async (tx) => {
       const updated = await tx.laptopListing.update({
         where: { id: existing.id, sellerId: req.userId }, data: { status: parsed.data.status },

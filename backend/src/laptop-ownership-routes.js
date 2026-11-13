@@ -80,6 +80,8 @@ export function registerLaptopOwnershipRoutes(app) {
     const listing = await prisma.laptopListing.findUnique({ where: { id: req.params.id }, select: { sellerId: true, ownershipStatus: true } });
     if (!listing) return res.status(404).json({ error: "Listing not found" });
     if (listing.sellerId !== req.userId) return res.status(403).json({ error: "Only the seller may erase this document" });
+    const transferred=await prisma.storeIntakeQuote.findUnique({where:{listingId:req.params.id},select:{status:true}});
+    if (transferred?.status==="ACQUIRED") return res.status(409).json({error:"This proof supports a completed store purchase. Contact management to request lawful deletion or correction."});
     await prisma.$transaction(async tx => {
       await tx.laptopOwnershipEvidence.deleteMany({ where: { listingId: req.params.id } });
       await tx.laptopSellerVideoEvidence.deleteMany({ where: { listingId: req.params.id } });

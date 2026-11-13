@@ -154,6 +154,8 @@ export function registerSellerIntentRoutes(app) {
     });
     if (!listing) return deny(res,404,"Listing not found");
     if (listing.sellerId !== req.userId) return deny(res,403,"Only the listing seller may erase the recording");
+    const transferred=await prisma.storeIntakeQuote.findUnique({where:{listingId:req.params.id},select:{status:true}});
+    if (transferred?.status==="ACQUIRED") return deny(res,409,"This recording supports a completed store acquisition. Request lawful deletion through the trading desk.");
     await prisma.$transaction(async tx => {
       await tx.laptopSellerVideoEvidence.deleteMany({ where: { listingId: req.params.id } });
       await tx.laptopSellerVideoChallenge.deleteMany({ where: { listingId: req.params.id } });
