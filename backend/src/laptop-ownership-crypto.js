@@ -19,8 +19,23 @@ export function normalizedSerial(input) {
   return serial;
 }
 
-export function serialFingerprint(serial, key) {
-  return createHmac("sha256", key).update("campusverse:laptop:serial:v1:" + normalizedSerial(serial)).digest("hex");
+export function normalizedDeviceIdentifier(deviceType, input) {
+  if (deviceType === "LAPTOP") return normalizedSerial(input);
+  if (deviceType !== "PHONE") throw new Error("Invalid device type");
+  const imei = String(input ?? "").trim().replace(/[\s-]/g, "");
+  if (!/^\d{15}$/.test(imei)) throw new Error("Enter the device’s 15-digit IMEI from Settings or its original box");
+  const digits = [...imei].map(Number);
+  const checksum = digits.reduce((sum, digit, index) => {
+    if (index % 2 === 1) { const x = digit * 2; return sum + (x > 9 ? x - 9 : x); }
+    return sum + digit;
+  }, 0);
+  if (checksum % 10 !== 0) throw new Error("Invalid IMEI check digit; recheck the phone number");
+  return imei;
+}
+
+export function serialFingerprint(serial, key, deviceType = "LAPTOP") {
+  const value = normalizedDeviceIdentifier(deviceType, serial);
+  return createHmac("sha256", key).update("campusverse:device:identifier:v2:" + deviceType + ":" + value).digest("hex");
 }
 
 export function recognizedImage(bytes) {

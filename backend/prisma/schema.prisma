@@ -242,9 +242,17 @@ enum LaptopReportStatus {
   OPEN
   RESOLVED
 }
+enum DeviceType {
+  LAPTOP
+  PHONE
+}
 enum LaptopOfferStatus {
   PENDING
+  ADMIN_APPROVED
   ACCEPTED
+  COMPLETED
+  REJECTED_BY_ADMIN
+  DISPUTED
   DECLINED
   WITHDRAWN
 }
@@ -253,6 +261,7 @@ model LaptopListing {
   id               String              @id @default(cuid())
   seller           User                @relation("LaptopListingsBySeller", fields: [sellerId], references: [id])
   sellerId         String
+  deviceType       DeviceType          @default(LAPTOP)
   brand            String
   model            String
   processor        String
@@ -300,11 +309,29 @@ model LaptopOffer {
   // BUY: buyer's cash bid; SWAP: + amount buyer pays target seller, - amount seller pays buyer.
   amount          Float
   note            String            @default("")
+  adminReviewedAt DateTime?
+  completedAt     DateTime?
+  adminNotes      String?
   status          LaptopOfferStatus @default(PENDING)
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
   @@index([targetId, status])
   @@index([buyerId, status])
+  moderationEvents DeviceOfferAudit[]
+}
+
+model DeviceOfferAudit {
+  id           String         @id @default(cuid())
+  offer        LaptopOffer    @relation(fields: [offerId], references: [id])
+  offerId      String
+  adminId      String
+  action       LaptopOfferStatus
+  note         String
+  inspectionConfirmed Boolean @default(false)
+  paymentConfirmed Boolean    @default(false)
+  handoverConfirmed Boolean   @default(false)
+  createdAt    DateTime       @default(now())
+  @@index([offerId, createdAt])
 }
 
 model LaptopOwnershipEvidence {

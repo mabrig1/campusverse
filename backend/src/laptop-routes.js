@@ -1,16 +1,17 @@
 import { z } from "zod";
 import { prisma } from "./db.js";
 import { requireAuth } from "./auth.js";
-import { evidenceKey, normalizedSerial, serialFingerprint } from "./laptop-ownership-crypto.js";
+import { evidenceKey, normalizedDeviceIdentifier, serialFingerprint } from "./laptop-ownership-crypto.js";
 
 const amount = z.number().finite().min(-100_000_000).max(100_000_000);
 const listingSchema = z.object({
+  deviceType: z.enum(["LAPTOP", "PHONE"]),
   brand: z.string().trim().min(2).max(60),
   model: z.string().trim().min(2).max(100),
-  processor: z.string().trim().min(2).max(100),
-  ramGb: z.number().int().min(1).max(512),
+  processor: z.string().trim().max(100).default("Not disclosed"),
+  ramGb: z.number().int().min(0).max(512),
   storageGb: z.number().int().min(16).max(16384),
-  storageType: z.enum(["SSD", "HDD", "EMMC"]),
+  storageType: z.enum(["SSD", "HDD", "EMMC", "INTERNAL"]),
   condition: z.enum(["EXCELLENT", "GOOD", "FAIR", "NEEDS_REPAIR"]),
   batteryHealth: z.number().int().min(0).max(100).nullable().optional(),
   faults: z.string().trim().min(3).max(600),
@@ -58,6 +59,7 @@ export function registerLaptopRoutes(app) {
       status: "ACTIVE",
       ownershipStatus: "REVIEWED",
       ...(condition ? { condition } : {}),
+      ...(["PHONE", "LAPTOP"].includes(req.query.deviceType) ? { deviceType: req.query.deviceType } : {}),
       ...(req.query.swap === "true" ? { allowSwap: true } : {}),
       ...(q ? { OR: [
         { brand: { contains: q, mode: "insensitive" } },
@@ -81,7 +83,7 @@ export function registerLaptopRoutes(app) {
 
   app.get("/api/laptops/offers", requireAuth, asyncRoute(async (req, res) => {
     const items = await prisma.laptopOffer.findMany({
-      where: { OR: [{ buyerId: req.userId }, { target: { is: { sellerId: req.userId } } }] },
+      where: { OR: [{ buyerId: req.userId }, { target: { is: { sellerId: req.userId } }, status: { not: "PENDING" } }] },
       include: offerIncludes, orderBy: { createdAt: "desc" }, take: 100,
     });
     res.json({ items });
@@ -92,8 +94,8 @@ export function registerLaptopRoutes(app) {
     if (!parsed.success) return fail(res, parsed);
     let serial, fingerprint;
     try {
-      serial = normalizedSerial(parsed.data.serialNumber);
-      fingerprint = serialFingerprint(serial, evidenceKey());
+      serial = normalizedDeviceIdentifier(parsed.data.deviceType, parsed.data.serialNumber);
+      fingerprint = serialFingerprint(serial, evidenceKey(), parsed.data.deviceType);
     } catch (error) {
       return res.status(error.message.includes("not configured") ? 503 : 400).json({ error: error.message });
     }
@@ -155,6 +157,10 @@ export function registerLaptopRoutes(app) {
       if (!offered || offered.sellerId !== req.userId || !isReviewed(offered))
         return res.status(400).json({ error: "Swap device must be your own active listing" });
     }
+    const outstanding = await prisma.laptopOffer.count({
+      where: { buyerId: req.userId, status: { in: ["PENDING", "ADMIN_APPROVED"] } },
+    });
+    if (outstanding >= 10) return res.status(429).json({ error: "You have ten open offers. Withdraw or complete an offer before submitting another." });
     const item = await prisma.laptopOffer.create({
       data: { type, amount: offerAmount, note, offeredId: type === "SWAP" ? offeredId : null, targetId: target.id, buyerId: req.userId },
     });
@@ -175,14 +181,18 @@ export function registerLaptopRoutes(app) {
     const isSeller = offer.target.sellerId === req.userId;
     if (parsed.data.status === "WITHDRAWN" ? !isBuyer : !isSeller)
       return res.status(403).json({ error: "Not authorised for this offer action" });
-    if (offer.status !== "PENDING") return res.status(409).json({ error: "Offer is no longer pending" });
+    if (!["PENDING", "ADMIN_APPROVED"].includes(offer.status)) return res.status(409).json({ error: "Offer is no longer pending" });
+    if (parsed.data.status === "ACCEPTED" && (offer.status !== "ADMIN_APPROVED" || !isSeller))
+      return res.status(409).json({ error: "The marketplace owner must approve the offer before the seller can agree" });
+    if (parsed.data.status === "DECLINED" && (offer.status !== "ADMIN_APPROVED" || !isSeller))
+      return res.status(409).json({ error: "Only owner-approved offers can be declined by the seller" });
     if (parsed.data.status === "ACCEPTED" &&
         (!isReviewed(offer.target) ||
           (offer.type === "SWAP" && (!offer.offered || !isReviewed(offer.offered) || offer.offered.sellerId !== offer.buyerId)))) {
       return res.status(409).json({ error: "One of the laptops is no longer available for this offer" });
     }
     const result = await prisma.laptopOffer.updateMany({
-      where: { id: offer.id, status: "PENDING" }, data: { status: parsed.data.status },
+      where: { id: offer.id, status: offer.status }, data: { status: parsed.data.status },
     });
     if (!result.count) return res.status(409).json({ error: "Offer changed; reload and try again" });
     res.json({ status: parsed.data.status, message: "Offer status updated. This does not exchange funds or transfer ownership." });

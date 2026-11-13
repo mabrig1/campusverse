@@ -18,7 +18,7 @@ const reviewSchema = z.object({
 }).strict();
 
 const metadataSelect = {
-  id: true, brand: true, model: true, serialLast4: true, location: true, status: true,
+  id: true, deviceType: true, brand: true, model: true, serialLast4: true, location: true, status: true,
   ownershipStatus: true, ownershipReviewedAt: true, createdAt: true,
   ownershipEvidence: { select: { id: true, documentType: true, mimeType: true, byteLength: true, uploadedAt: true } },
   seller: { select: { id: true, name: true, email: true } },

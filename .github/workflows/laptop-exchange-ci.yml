@@ -34,6 +34,7 @@ jobs:
           node --check backend/src/laptop-routes.js
           node --check backend/src/laptop-ownership-routes.js
           node --check backend/src/laptop-ownership-crypto.js
+          node --check backend/src/device-offer-admin-routes.js
       - name: Ownership encryption and serial fingerprint tests
         run: npm run test --workspace=backend
       - name: Swap calculator unit tests
