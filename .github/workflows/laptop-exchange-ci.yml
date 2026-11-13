@@ -3,17 +3,45 @@ on:
   push:
     branches:
       - feat/campusverse-laptop-exchange-20261112
+      - feat/campusverse-owner-controlled-phones-laptops-20261113
   pull_request:
     paths:
       - 'backend/prisma/**'
       - 'backend/src/laptop-routes.js'
       - 'backend/src/laptop-ownership-*.js'
+      - 'backend/src/seller-intent-routes.js'
+      - 'backend/src/seller-intent-integration.test.js'
+      - 'backend/src/personal-store-integration.test.js'
+      - 'backend/src/personal-store-routes.js'
+      - 'backend/src/store-pilot.js'
       - 'backend/server.js'
+      - 'backend/src/device-offer-admin-routes.js'
+      - 'backend/src/trading-owner.js'
+      - 'backend/src/owner-managed-launch.js'
       - 'frontend/**'
       - '.github/workflows/laptop-exchange-ci.yml'
+      - '.github/workflows/cloudflare-preview.yml'
+      - 'workers/**'
+      - 'docs/cloudflare-worker-rollout.md'
+permissions:
+  contents: read
 jobs:
   validate:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: campusverse
+          POSTGRES_PASSWORD: campusverse
+          POSTGRES_DB: campusverse
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U campusverse -d campusverse"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
     env:
       DATABASE_URL: postgresql://campusverse:campusverse@localhost:5432/campusverse?schema=public
       JWT_SECRET: laptop-ci-only-not-a-production-secret
@@ -28,15 +56,40 @@ jobs:
         run: npm ci
       - name: Prisma schema validation (no DB mutation)
         run: cd backend && npx prisma validate --schema prisma/schema.prisma
+      - name: Apply migrations to disposable CI PostgreSQL
+        run: cd backend && npx prisma migrate deploy && npx prisma generate
       - name: Backend syntax
         run: |
           node --check backend/server.js
           node --check backend/src/laptop-routes.js
           node --check backend/src/laptop-ownership-routes.js
           node --check backend/src/laptop-ownership-crypto.js
+          node --check backend/src/seller-intent-routes.js
+          node --check backend/src/personal-store-routes.js
+          node --check backend/src/store-pilot.js
+          node --check backend/src/device-offer-admin-routes.js
+          node --check backend/src/trading-owner.js
+          node --check backend/src/owner-managed-launch.js
       - name: Ownership encryption and serial fingerprint tests
         run: npm run test --workspace=backend
+      - name: Seller authorisation video end-to-end security test (disposable PostgreSQL)
+        env:
+          VERCEL: '1'
+          TRADING_OWNER_EMAIL: owner-integration-test@example.test
+        run: |
+          node --test backend/src/seller-intent-integration.test.js
+          node --test backend/src/personal-store-integration.test.js
+      - name: Cloudflare Worker safety and config tests
+        run: |
+          node --check workers/edge-api/src/index.js
+          node --test workers/edge-api/src/index.test.js
+          node --test workers/edge-api/prepare-staging.test.mjs
+          node workers/edge-api/validate-config.mjs
       - name: Swap calculator unit tests
         run: npm run test --workspace=frontend
       - name: Frontend production build
         run: npm run build --workspace=frontend
+      - name: Wrangler dry-run without Cloudflare credentials (staging only)
+        run: |
+          npx --yes wrangler@4.45.0 deploy --dry-run --config workers/edge-api/wrangler.jsonc
+          npx --yes wrangler@4.45.0 deploy --dry-run --config frontend/wrangler.jsonc

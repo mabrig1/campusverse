@@ -11,6 +11,11 @@ enum Role {
   STUDENT
   ADMIN
 }
+enum StoreRegistrationIntent {
+  BUY_FROM_STORE
+  SELL_TO_STORE
+  BOTH
+}
 
 model User {
   id        String   @id @default(cuid())
@@ -22,6 +27,7 @@ model User {
   regNo     String?
   hostel    String?
   phone     String?
+  storeIntent StoreRegistrationIntent @default(BUY_FROM_STORE)
   avatarUrl String?
   createdAt DateTime @default(now())
 
@@ -44,6 +50,7 @@ model User {
   laptopListings LaptopListing[] @relation("LaptopListingsBySeller")
   laptopOffers LaptopOffer[] @relation("LaptopOffersByBuyer")
   laptopSafetyReports LaptopSafetyReport[] @relation("LaptopReportsByUser")
+  storeQuotesFromOwner StoreIntakeQuote[] @relation("StoreQuotesByOwner")
 }
 
 model Wallet {
@@ -242,9 +249,24 @@ enum LaptopReportStatus {
   OPEN
   RESOLVED
 }
+enum DeviceType {
+  LAPTOP
+  PHONE
+}
+enum StoreQuoteStatus {
+  OFFERED
+  SELLER_ACCEPTED
+  SELLER_DECLINED
+  ACQUIRED
+  CANCELLED
+}
 enum LaptopOfferStatus {
   PENDING
+  ADMIN_APPROVED
   ACCEPTED
+  COMPLETED
+  REJECTED_BY_ADMIN
+  DISPUTED
   DECLINED
   WITHDRAWN
 }
@@ -253,6 +275,7 @@ model LaptopListing {
   id               String              @id @default(cuid())
   seller           User                @relation("LaptopListingsBySeller", fields: [sellerId], references: [id])
   sellerId         String
+  deviceType       DeviceType          @default(LAPTOP)
   brand            String
   model            String
   processor        String
@@ -266,6 +289,8 @@ model LaptopListing {
   imageUrl         String?
   serialLast4      String?
   serialFingerprint String?
+  identifierMatchedAt DateTime?
+  identifierMatchedBy String?
   lockStatus       LaptopLockStatus    @default(NOT_CHECKED)
   ownershipDeclared Boolean           @default(false)
   ownershipStatus OwnershipReviewStatus @default(NOT_SUBMITTED)
@@ -279,13 +304,21 @@ model LaptopListing {
   updatedAt        DateTime            @updatedAt
   incomingOffers   LaptopOffer[]       @relation("TargetLaptopOffers")
   outgoingSwapOffers LaptopOffer[]     @relation("OfferedLaptopOffers")
+  // Under the owner-managed pilot only stock in the owner's custody is public.
+  storeInventory Boolean @default(false)
+  storeAcquiredAt DateTime?
+  originListingId String? @unique
+  storeQuote StoreIntakeQuote?
   ownershipEvidence LaptopOwnershipEvidence?
+  sellerVideoEvidence LaptopSellerVideoEvidence?
+  sellerVideoChallenge LaptopSellerVideoChallenge?
   ownershipReviews LaptopOwnershipReview[]
   safetyReports LaptopSafetyReport[]
   @@index([serialFingerprint])
   @@index([ownershipStatus])
   @@index([sellerId, status])
   @@index([status, createdAt])
+  @@index([storeInventory, status])
 }
 
 model LaptopOffer {
@@ -300,11 +333,29 @@ model LaptopOffer {
   // BUY: buyer's cash bid; SWAP: + amount buyer pays target seller, - amount seller pays buyer.
   amount          Float
   note            String            @default("")
+  adminReviewedAt DateTime?
+  completedAt     DateTime?
+  adminNotes      String?
   status          LaptopOfferStatus @default(PENDING)
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
   @@index([targetId, status])
   @@index([buyerId, status])
+  moderationEvents DeviceOfferAudit[]
+}
+
+model DeviceOfferAudit {
+  id           String         @id @default(cuid())
+  offer        LaptopOffer    @relation(fields: [offerId], references: [id])
+  offerId      String
+  adminId      String
+  action       LaptopOfferStatus
+  note         String
+  inspectionConfirmed Boolean @default(false)
+  paymentConfirmed Boolean    @default(false)
+  handoverConfirmed Boolean   @default(false)
+  createdAt    DateTime       @default(now())
+  @@index([offerId, createdAt])
 }
 
 model LaptopOwnershipEvidence {
@@ -329,6 +380,7 @@ model LaptopOwnershipReview {
   note             String
   serialMatched    Boolean               @default(false)
   provenanceChecked Boolean              @default(false)
+  sellerIntentConfirmed Boolean          @default(false)
   createdAt        DateTime              @default(now())
   @@index([listingId, createdAt])
 }
@@ -346,4 +398,48 @@ model LaptopSafetyReport {
   resolvedAt  DateTime?
   @@unique([listingId, reporterId])
   @@index([status, createdAt])
+}
+
+
+// Short-lived, per-device challenge used for an in-browser fresh seller authorisation video.
+// A successful upload consumes this challenge. Never exposed to public marketplace APIs.
+model LaptopSellerVideoChallenge {
+  id         String        @id @default(cuid())
+  listing    LaptopListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  listingId  String        @unique
+  challenge  String
+  expiresAt  DateTime
+  issuedAt   DateTime      @default(now())
+}
+
+model LaptopSellerVideoEvidence {
+  id          String        @id @default(cuid())
+  listing     LaptopListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  listingId   String        @unique
+  cipherText  Bytes
+  iv          Bytes
+  authTag     Bytes
+  mimeType    String
+  byteLength  Int
+  challenge   String
+  consentedAt DateTime
+  uploadedAt  DateTime      @default(now())
+}
+
+
+// Price negotiated between the single trading-desk owner and the student.
+model StoreIntakeQuote {
+  id String @id @default(cuid())
+  listing LaptopListing @relation(fields: [listingId], references: [id])
+  listingId String @unique
+  owner User @relation("StoreQuotesByOwner", fields: [ownerId], references: [id])
+  ownerId String
+  price Float
+  status StoreQuoteStatus @default(OFFERED)
+  note String @default("")
+  offeredAt DateTime @default(now())
+  agreedAt DateTime?
+  acquiredAt DateTime?
+  handoverNote String?
+  @@index([status])
 }

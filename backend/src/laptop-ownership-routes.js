@@ -1,8 +1,10 @@
 import express from "express";
+import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { prisma } from "./db.js";
 import { requireAuth, requireAdminAuth } from "./auth.js";
-import { MAX_EVIDENCE_BYTES, PROOF_TYPES, evidenceKey, recognizedImage, encryptEvidence, decryptEvidence } from "./laptop-ownership-crypto.js";
+import { requireTradingOwner } from "./trading-owner.js";
+import { MAX_EVIDENCE_BYTES, PROOF_TYPES, evidenceKey, recognizedOwnershipDocument, encryptEvidence, decryptEvidence, normalizedDeviceIdentifier, serialFingerprint } from "./laptop-ownership-crypto.js";
 
 const safe = fn => (req, res, next) => Promise.resolve(fn(req, res)).catch(next);
 const invalid = (res, parsed) => res.status(400).json({ error: parsed.error.issues[0]?.message || "Invalid input" });
@@ -15,19 +17,21 @@ const reviewSchema = z.object({
   note: z.string().trim().min(12).max(600),
   serialMatched: z.boolean().default(false),
   provenanceChecked: z.boolean().default(false),
+  sellerIntentConfirmed: z.boolean().default(false),
 }).strict();
 
 const metadataSelect = {
-  id: true, brand: true, model: true, serialLast4: true, location: true, status: true,
-  ownershipStatus: true, ownershipReviewedAt: true, createdAt: true,
+  id: true, deviceType: true, brand: true, model: true, serialLast4: true, location: true, status: true,
+  ownershipStatus: true, ownershipReviewedAt: true, identifierMatchedAt: true, createdAt: true,
   ownershipEvidence: { select: { id: true, documentType: true, mimeType: true, byteLength: true, uploadedAt: true } },
+  sellerVideoEvidence: { select: { id: true, mimeType: true, byteLength: true, challenge: true, uploadedAt: true, consentedAt: true } },
   seller: { select: { id: true, name: true, email: true } },
 };
 const isMissingKey = error => error.message === "Ownership evidence storage not configured";
 function cancelPendingOffers(tx, id) {
   return Promise.all([
-    tx.laptopOffer.updateMany({ where: { targetId: id, status: "PENDING" }, data: { status: "DECLINED" } }),
-    tx.laptopOffer.updateMany({ where: { offeredId: id, status: "PENDING" }, data: { status: "WITHDRAWN" } }),
+    tx.laptopOffer.updateMany({ where: { targetId: id, status: { in: ["PENDING", "ADMIN_APPROVED"] } }, data: { status: "DECLINED" } }),
+    tx.laptopOffer.updateMany({ where: { offeredId: id, status: { in: ["PENDING", "ADMIN_APPROVED"] } }, data: { status: "WITHDRAWN" } }),
   ]);
 }
 
@@ -44,9 +48,9 @@ export function registerLaptopOwnershipRoutes(app) {
       const type = String(req.get("x-ownership-document-type") || "").trim();
       if (!PROOF_TYPES.includes(type)) return res.status(400).json({ error: "Choose a supported ownership document type" });
       if (!Buffer.isBuffer(req.body) || !req.body.length || req.body.length > MAX_EVIDENCE_BYTES)
-        return res.status(400).json({ error: "Upload a PNG/JPEG receipt image smaller than 2 MB" });
-      const mimeType = recognizedImage(req.body);
-      if (!mimeType) return res.status(415).json({ error: "Only PNG and JPEG receipt photographs are accepted" });
+        return res.status(400).json({ error: "Upload a JPEG, PNG or PDF ownership document smaller than 2 MB" });
+      const mimeType = recognizedOwnershipDocument(req.body);
+      if (!mimeType) return res.status(415).json({ error: "Only JPEG, PNG and PDF ownership documents are accepted" });
       const listing = await prisma.laptopListing.findUnique({ where: { id: req.params.id }, select: { sellerId: true, status: true, ownershipStatus: true } });
       if (!listing) return res.status(404).json({ error: "Laptop listing not found" });
       if (listing.sellerId !== req.userId) return res.status(403).json({ error: "Only the listing owner can submit a document" });
@@ -59,9 +63,12 @@ export function registerLaptopOwnershipRoutes(app) {
           create: { listingId: req.params.id, documentType: type, ...encrypted, mimeType, byteLength: req.body.length },
           update: { documentType: type, ...encrypted, mimeType, byteLength: req.body.length, uploadedAt: new Date() },
         });
+        // Replacing the ownership document requires a fresh authorisation video.
+        await tx.laptopSellerVideoEvidence.deleteMany({ where: { listingId: req.params.id } });
+        await tx.laptopSellerVideoChallenge.deleteMany({ where: { listingId: req.params.id } });
         await tx.laptopListing.update({
           where: { id: req.params.id, sellerId: req.userId },
-          data: { ownershipStatus: "PENDING", ownershipReviewedAt: null, ownershipReviewNote: null },
+          data: { ownershipStatus: "PENDING", ownershipReviewedAt: null, ownershipReviewNote: null, identifierMatchedAt: null, identifierMatchedBy: null },
         });
         await cancelPendingOffers(tx, req.params.id);
       });
@@ -73,13 +80,17 @@ export function registerLaptopOwnershipRoutes(app) {
     const listing = await prisma.laptopListing.findUnique({ where: { id: req.params.id }, select: { sellerId: true, ownershipStatus: true } });
     if (!listing) return res.status(404).json({ error: "Listing not found" });
     if (listing.sellerId !== req.userId) return res.status(403).json({ error: "Only the seller may erase this document" });
+    const transferred=await prisma.storeIntakeQuote.findUnique({where:{listingId:req.params.id},select:{status:true}});
+    if (transferred?.status==="ACQUIRED") return res.status(409).json({error:"This proof supports a completed store purchase. Contact management to request lawful deletion or correction."});
     await prisma.$transaction(async tx => {
       await tx.laptopOwnershipEvidence.deleteMany({ where: { listingId: req.params.id } });
+      await tx.laptopSellerVideoEvidence.deleteMany({ where: { listingId: req.params.id } });
+      await tx.laptopSellerVideoChallenge.deleteMany({ where: { listingId: req.params.id } });
       await tx.laptopListing.update({
         where: { id: req.params.id },
         data: {
           ownershipStatus: ["FLAGGED", "REVOKED"].includes(listing.ownershipStatus) ? listing.ownershipStatus : "NOT_SUBMITTED",
-          ownershipReviewedAt: null, ownershipReviewNote: null,
+          ownershipReviewedAt: null, ownershipReviewNote: null, identifierMatchedAt: null, identifierMatchedBy: null,
         },
       });
       await cancelPendingOffers(tx, req.params.id);
@@ -113,7 +124,7 @@ export function registerLaptopOwnershipRoutes(app) {
   }));
 
   // Admin endpoints re-check current DB role and require an 8-hour admin-scoped token.
-  app.get("/api/admin/v2/laptop-ownership", requireAdminAuth, safe(async (req, res) => {
+  app.get("/api/admin/v2/laptop-ownership", requireAdminAuth, requireTradingOwner, safe(async (req, res) => {
     const records = await prisma.laptopListing.findMany({
       where: { ownershipStatus: { in: ["PENDING", "NEEDS_MORE_INFO", "REJECTED", "FLAGGED", "REVOKED"] } },
       select: metadataSelect, orderBy: { updatedAt: "desc" }, take: 80,
@@ -122,7 +133,7 @@ export function registerLaptopOwnershipRoutes(app) {
     res.json({ items: records });
   }));
 
-  app.get("/api/admin/v2/laptop-reports", requireAdminAuth, safe(async (req, res) => {
+  app.get("/api/admin/v2/laptop-reports", requireAdminAuth, requireTradingOwner, safe(async (req, res) => {
     const records = await prisma.laptopSafetyReport.findMany({
       where: { status: "OPEN" }, take: 80, orderBy: { createdAt: "desc" },
       select: {
@@ -134,7 +145,34 @@ export function registerLaptopOwnershipRoutes(app) {
     res.json({ items: records });
   }));
 
-  app.get("/api/admin/v2/laptop-ownership/:id/document", requireAdminAuth, safe(async (req, res) => {
+  app.post("/api/admin/v2/laptop-ownership/:id/match-identifier", requireAdminAuth, requireTradingOwner, safe(async (req, res) => {
+    const parsed = z.object({ identifier: z.string().min(6).max(50) }).strict().safeParse(req.body);
+    if (!parsed.success) return invalid(res, parsed);
+    const listing = await prisma.laptopListing.findUnique({ where: { id: req.params.id },
+      select: { deviceType: true, serialFingerprint: true, ownershipStatus: true, status: true } });
+    if (!listing) return res.status(404).json({ error: "Device not found" });
+    if (listing.status === "CLOSED" || !["PENDING", "NEEDS_MORE_INFO", "FLAGGED"].includes(listing.ownershipStatus))
+      return res.status(409).json({ error: "Device is not awaiting fresh review" });
+    let matched = false;
+    try {
+      const identifier = normalizedDeviceIdentifier(listing.deviceType, parsed.data.identifier);
+      const fingerprint = serialFingerprint(identifier, evidenceKey(), listing.deviceType);
+      if (listing.serialFingerprint) {
+        const left = Buffer.from(fingerprint, "hex"), right = Buffer.from(listing.serialFingerprint, "hex");
+        matched = left.length === right.length && timingSafeEqual(left, right);
+      }
+    } catch (error) {
+      return res.status(error.message.includes("not configured") ? 503 : 400).json({ error: error.message });
+    }
+    if (matched) await prisma.laptopListing.update({ where: { id: req.params.id },
+      data: { identifierMatchedAt: new Date(), identifierMatchedBy: req.userId } });
+    res.setHeader("Cache-Control","no-store");
+    res.json({ match: matched, message: matched
+      ? "Identifier matches the original listing. Inspect possession and lawful transfer history separately."
+      : "Identifier mismatch: do not approve until investigated." });
+  }));
+
+  app.get("/api/admin/v2/laptop-ownership/:id/document", requireAdminAuth, requireTradingOwner, safe(async (req, res) => {
     let key;
     try { key = evidenceKey(); } catch (e) {
       if (isMissingKey(e)) return res.status(503).json({ error: "Encrypted document retrieval not configured" });
@@ -150,21 +188,21 @@ export function registerLaptopOwnershipRoutes(app) {
     res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Content-Type", "application/octet-stream");
-    res.setHeader("Content-Disposition", "attachment; filename=\"ownership-evidence." + (proof.mimeType === "image/png" ? "png" : "jpg") + "\"");
+    res.setHeader("Content-Disposition", "attachment; filename=\"ownership-evidence." + (proof.mimeType === "application/pdf" ? "pdf" : proof.mimeType === "image/png" ? "png" : "jpg") + "\"");
     res.send(bytes);
   }));
 
-  app.post("/api/admin/v2/laptop-ownership/:id/review", requireAdminAuth, safe(async (req, res) => {
+  app.post("/api/admin/v2/laptop-ownership/:id/review", requireAdminAuth, requireTradingOwner, safe(async (req, res) => {
     const parsed = reviewSchema.safeParse(req.body);
     if (!parsed.success) return invalid(res, parsed);
-    const { decision, note, serialMatched, provenanceChecked } = parsed.data;
+    const { decision, note, serialMatched, provenanceChecked, sellerIntentConfirmed } = parsed.data;
     const record = await prisma.laptopListing.findUnique({
-      where: { id: req.params.id }, include: { ownershipEvidence: { select: { id: true } } },
+      where: { id: req.params.id }, include: { ownershipEvidence: { select: { id: true } }, sellerVideoEvidence: { select: { id: true, challenge: true } } },
     });
     if (!record) return res.status(404).json({ error: "Listing not found" });
     if (decision === "REVIEWED") {
-      if (!record.ownershipEvidence || !record.serialFingerprint || !serialMatched || !provenanceChecked)
-        return res.status(409).json({ error: "Document, serial match and provenance checks are required for review approval" });
+      if (!record.ownershipEvidence || !record.sellerVideoEvidence || !sellerIntentConfirmed || !record.serialFingerprint || !record.identifierMatchedAt || !serialMatched || !provenanceChecked)
+        return res.status(409).json({ error: "Ownership document, fresh seller-authorisation selfie video, physical serial match and provenance review are all required for approval" });
       if (record.status === "CLOSED") return res.status(409).json({ error: "Closed listings cannot be approved" });
       if (!["PENDING", "NEEDS_MORE_INFO", "FLAGGED", "REJECTED", "REVOKED"].includes(record.ownershipStatus))
         return res.status(409).json({ error: "This listing is not awaiting review" });
@@ -175,8 +213,16 @@ export function registerLaptopOwnershipRoutes(app) {
       if (conflict) return res.status(409).json({ error: "Duplicate device fingerprint on another open listing. Investigate before approving." });
     }
     await prisma.$transaction(async tx => {
+      // Recheck sensitive evidence in the same transaction before granting access.
+      if (decision === "REVIEWED") {
+        const [document, video] = await Promise.all([
+          tx.laptopOwnershipEvidence.findUnique({ where: { listingId: record.id }, select: { id: true } }),
+          tx.laptopSellerVideoEvidence.findUnique({ where: { listingId: record.id }, select: { id: true } }),
+        ]);
+        if (!document || !video) throw Object.assign(new Error("Owner evidence changed during review"), { status: 409 });
+      }
       await tx.laptopOwnershipReview.create({
-        data: { listingId: record.id, reviewerId: req.userId, action: decision, note, serialMatched, provenanceChecked },
+        data: { listingId: record.id, reviewerId: req.userId, action: decision, note, serialMatched, provenanceChecked, sellerIntentConfirmed },
       });
       await tx.laptopListing.update({
         where: { id: record.id }, data: {
@@ -186,10 +232,10 @@ export function registerLaptopOwnershipRoutes(app) {
       });
       if (decision !== "REVIEWED") await cancelPendingOffers(tx, record.id);
     });
-    res.json({ ownershipStatus: decision, message: "Admin decision recorded. Document review alone cannot guarantee a laptop is not stolen." });
+    res.json({ ownershipStatus: decision, message: "Documents and seller-authorisation video reviewed. This is not official stolen-device clearance or automated identity verification." });
   }));
 
-  app.post("/api/admin/v2/laptop-reports/:id/resolve", requireAdminAuth, safe(async (req, res) => {
+  app.post("/api/admin/v2/laptop-reports/:id/resolve", requireAdminAuth, requireTradingOwner, safe(async (req, res) => {
     const record = await prisma.laptopSafetyReport.findUnique({ where: { id: req.params.id } });
     if (!record) return res.status(404).json({ error: "Report not found" });
     const updated = await prisma.laptopSafetyReport.updateMany({

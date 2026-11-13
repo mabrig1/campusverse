@@ -124,3 +124,61 @@ A listing begins `NOT_SUBMITTED`, becomes `PENDING` after upload, and is only pu
 **APIs:** `POST/DELETE /api/laptops/:id/ownership-proof`, `POST /api/laptops/:id/safety-report`, and administrator `GET /api/admin/v2/laptop-ownership`, `GET /api/admin/v2/laptop-reports`, `GET /api/admin/v2/laptop-ownership/:id/document`, `POST /api/admin/v2/laptop-ownership/:id/review`, `POST /api/admin/v2/laptop-reports/:id/resolve`. Upload requires `Content-Type: application/octet-stream` and `X-Ownership-Document-Type` in `PURCHASE_RECEIPT`, `BILL_OF_SALE`, `ORGANISATION_RELEASE`. Evidence is NOT available through normal marketplace APIs.
 
 **Important:** Do not merge or run these migrations against production until approved; the new database migration is intentionally unexecuted. A production process still needs privacy notice, retention/deletion schedule, trained reviewers, access logging, upload malware checks, appeals and lawful escalation for confirmed stolen property.
+
+### First launch: owner-controlled device trading (phones and laptops)
+- The homepage prioritizes **buy / sell / swap phones & laptops**, while academic services remain available.
+- Every device needs a privately submitted original receipt, bill of sale or official release, and a privately fingerprinted laptop serial or valid-format phone IMEI. A valid IMEI checksum is **not** proof a device is not stolen.
+- Only the designated administrative account (matching `TRADING_OWNER_EMAIL`) may see confidential ownership evidence, perform an actual-device identifier match and approve listing documents.
+- Buyers submit offers; the owner approves before the seller can accept. An accepted offer is **not** a sale. Only the owner can mark completion after checking physical inspection, real payment receipt and handover. All owner deal decisions are audited.
+- `LAPTOP_PROOF_ENCRYPTION_KEY_BASE64` and `TRADING_OWNER_EMAIL` are required in the backend environment. Missing configuration blocks affected actions. Do not place secrets or NIN/BVN on the frontend.
+- **First release dependencies**: safely apply the pending Postgres migrations in sequence, validate owner login, test proof upload/admin review and the full two-account buy/swap workflow, then deploy frontend and backend together. Do not merge a green UI build directly to production without migration and operational readiness. No production release has been performed.
+
+## Cloudflare Worker resource optimisation (staged, not production)
+
+A Cloudflare API gateway and optional static frontend Worker have been added. Caching is limited to anonymous static marketplace categories and public service metadata. **Phone/laptop listings, ownership proofs, admin actions, offers and all transactions are never cached.** Neither Worker is attached to the live domain. See [Cloudflare deployment, verification and rollback guide](docs/cloudflare-worker-rollout.md).
+
+
+## Mandatory seller-initiated selfie video — management-only first release
+A student selling or swapping a used laptop or iPhone must submit **both** lawful ownership paperwork and a **fresh self-recorded authorisation video**. This strengthens evidence of the seller's voluntary intention but is **not** biometric identification, a government ID check, police clearance, or proof that the device is not stolen.
+
+1. Seller creates a private device listing and uploads a PNG/JPEG receipt, signed bill of sale or organisation release (max 2 MB). Full serial/IMEI remains a keyed HMAC fingerprint.
+2. In **My listings → Seller video**, seller requests a one-time, **10-minute** challenge. Requesting a new challenge invalidates prior video approval and clears pending/approved offers. A new challenge has a 60-second cooldown.
+3. Seller explicitly consents to recording a **fresh approximately 8-second selfie video with camera and microphone**. They state that they personally authorised the sale/swap of the displayed device, its identifier suffix, and the new challenge. The browser automatically stops recording and previews it before upload.
+4. Server accepts only WebM/MP4 uploads up to **2 MB**, matching the active one-time challenge, linked to the authenticated listing seller. It encrypts the binary video with AES-256-GCM and listing-scoped authenticated data, stores it in private PostgreSQL, and consumes the challenge.
+5. Only the designated ADMIN configured by `TRADING_OWNER_EMAIL` may retrieve the private recording. Before approving, the owner must personally review the clip, confirm the challenge and voluntary declaration, check the ownership receipt and physically match serial/IMEI. No automated facial recognition, liveness detection or stolen-device blacklist lookup is performed.
+6. Replacing a document or deleting a video revokes approval and removes the listing from public searches. An administrator cannot mark a listing REVIEWED unless the private receipt and selfie video both exist and owner checkboxes are confirmed.
+7. Never expose selfie videos to buyers or as public URLs. The video may contain identifiable personal information; configure a privacy notice, access controls, retention period, deletion procedure and incident handling policy **before production rollout**. No automatic video-retention purge is implemented yet.
+
+**Operational limit:** The upload signature and single-use challenge alone cannot prove the file is playable, contains a real person, was freshly filmed, or establishes rightful ownership. This requires actual reviewer inspection and, for valuable devices, physical handover checks. The current 2 MB limit is intended for a short, low-resolution clip because serverless request payloads are size-constrained. If longer recordings are needed, use secure, privately encrypted direct uploads to reviewed object storage rather than exposing videos in public R2 buckets.
+
+**Safe first release:** This branch adds a PostgreSQL migration which intentionally resets old document-only REVIEWED listings to PENDING and invalidates open offers; back up and review data before ever applying it in production. Keep PR #10 open until buyer/seller/owner staging tests and privacy controls pass. The existing live site is unchanged by this commit.
+
+
+## First launch — ONE CampusVerse-owned physical store (personal pilot)
+
+**Business rule: Students do not open stores and do not sell directly to other students.** During the owner's multi-month test run, all transactions are handled by the single designated ADMIN account, configured with `TRADING_OWNER_EMAIL`. `CAMPUSVERSE_PERSONAL_STORE_ONLY` defaults to TRUE and is also documented in backend/.env.example. There is no automatic multi-store activation after a particular date.
+
+The website now sells only devices acquired into owner stock, focused on used laptops and iPhones; the generic printing/services/affiliate marketplace is not part of the first-launch homepage. Registration presents `BUY_FROM_STORE`, `SELL_TO_STORE` or `BOTH` as **intention preferences**, never store-creation rights. Google and earlier accounts can still sell directly to the store.
+
+**Selling to CampusVerse**
+1. Student signs in and creates a *private intake submission*, not a publicly visible advertisement.
+2. Student submits lawful receipt/transfer evidence and a fresh challenged selfie video; only the owner can review private media.
+3. Owner inspects the actual device and checks provenance/IMEI or serial, manually approving the evidence. This is not police/stolen-device clearance.
+4. Owner makes a private quote from the Store Desk; seller explicitly accepts or declines. The offer does not transfer money or ownership.
+5. On payment and physical custody, owner confirms the agreed price, inspection and handover in the Store Desk. A single PostgreSQL transaction CLOSES the student intake and creates a **new owner-owned inventory record**, linked to the original seller's audit evidence. The public listing appears only after acquisition.
+6. Original seller cannot reopen an acquired device as a peer listing. Video/receipt deletion requests for completed purchases go through the owner and documented data-retention process; a buyer never sees these files.
+
+**Buying from CampusVerse**
+- Visitors can see only `sellerId = configured owner`, `storeInventory = true`, `storeAcquiredAt != NULL`, `status = ACTIVE` and `ownershipStatus = REVIEWED`. Missing owner configuration fails CLOSED instead of exposing other students' devices.
+- Customer submits an offer to owner stock. The designated owner approves or accepts it, and records payment/inspection/handover; no automatic wallet, escrow, self-service purchase or student-to-student deal is implemented.
+- For a swap, the student's trade-in must itself have approved ownership evidence; on completion it is transferred into owner inventory in PAUSED status for further owner inspection/pricing before resale.
+- Old generic vendor listings are hidden by the API during this launch. The site does not advertise other owners' goods as store-owned.
+
+**Operations**
+- `GET /api/store/pilot` reports the pilot mode.
+- `GET /api/admin/v2/store-intake` lists private seller submissions, and `POST /api/admin/v2/store-intake/:id/quote` sends an owner price.
+- `PATCH /api/laptops/:id/store-quote` lets the seller accept or decline.
+- `POST /api/admin/v2/store-intake/:id/acquire` records the seller's agreement, inspection, payment and custody, closing the old private listing and creating owner stock atomically.
+- `GET /api/admin/v2/store-inventory`, `POST .../:id/activate`, `PATCH .../:id/price` and `PATCH .../:id/status` support own stock without third-party storefronts.
+
+**Release caveats:** The migration hides all pre-existing student device listings (storeInventory defaults false) and invalidates open peer-to-peer offers. Review and back up the live database before any production migration. No bank-account verification, actual cash disbursement, signed receipt generation, stolen-device database access or legal title verification is claimed. The owner must obtain real payment/handovers, custody records and appropriate privacy/retention policies before public rollout. The single-store code is on PR #10 and remains unmerged/undeployed.

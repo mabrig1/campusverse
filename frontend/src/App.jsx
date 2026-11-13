@@ -5,6 +5,9 @@ import WalletTab from './WalletTab';
 import MarketplaceBrowse from './marketplace/MarketplaceBrowse';
 import LaptopExchange from './LaptopExchange';
 
+// Pilot phase: hide legacy peer-to-peer/wallet links; owner must approve all device deals.
+const OWNER_MANAGED_LAUNCH = import.meta.env.VITE_OWNER_MANAGED_LAUNCH !== 'false';
+
 // SVG Icons
 const Icons = {
   Home: () => (
@@ -64,7 +67,7 @@ const Icons = {
   )
 };
 
-export default function App({ initialTab = 'dashboard' }) {
+export default function App({ initialTab = 'laptops' }) {
   const [token, setToken] = useState(() => {
     const stored = localStorage.getItem('cv_token');
     if (stored) setAuthToken(stored);
@@ -158,7 +161,7 @@ export default function App({ initialTab = 'dashboard' }) {
     setAuthToken(null);
     setToken(null);
     setUser(null);
-    setCurrentTab('dashboard');
+    setCurrentTab('laptops');
   };
 
   // Load backend content once authenticated
@@ -344,14 +347,14 @@ export default function App({ initialTab = 'dashboard' }) {
         </div>
 
         <nav className="nav-links">
-          <a href="#" className={`nav-item ${currentTab === 'dashboard' ? 'active' : ''}`} onClick={() => setCurrentTab('dashboard')}>
+          <a href="#" className={`nav-item ${currentTab === 'dashboard' ? 'active' : ''}`} style={OWNER_MANAGED_LAUNCH ? { display: 'none' } : undefined} onClick={() => setCurrentTab('dashboard')}>
             <Icons.Home /> <span>News Feed</span>
           </a>
-          <a href="#" className={`nav-item ${currentTab === 'marketplace' ? 'active' : ''}`} onClick={() => setCurrentTab('marketplace')}>
+          <a href="#" className={`nav-item ${currentTab === 'marketplace' ? 'active' : ''}`} style={OWNER_MANAGED_LAUNCH ? { display: 'none' } : undefined} onClick={() => setCurrentTab('marketplace')}>
             <Icons.Marketplace /> <span>Marketplace</span>
           </a>
           <a href="#" className={`nav-item ${currentTab === 'laptops' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setCurrentTab('laptops'); }}>
-            <span className="nav-icon" aria-hidden="true">💻</span> <span>Buy • Sell • Swap Laptops</span>
+            <span className="nav-icon" aria-hidden="true">📱💻</span> <span>Buy • Sell • Swap Phones & Laptops</span>
           </a>
           <a href="#" className={`nav-item ${currentTab === 'services' ? 'active' : ''}`} onClick={() => setCurrentTab('services')}>
             <Icons.Services /> <span>Services & Jobs</span>
@@ -359,13 +362,13 @@ export default function App({ initialTab = 'dashboard' }) {
           <a href="#" className={`nav-item ${currentTab === 'directory' ? 'active' : ''}`} onClick={() => setCurrentTab('directory')}>
             <Icons.Directory /> <span>Local Directory</span>
           </a>
-          <a href="#" className={`nav-item ${currentTab === 'wallet' ? 'active' : ''}`} onClick={() => setCurrentTab('wallet')}>
+          <a href="#" className={`nav-item ${currentTab === 'wallet' ? 'active' : ''}`} style={OWNER_MANAGED_LAUNCH ? { display: 'none' } : undefined} onClick={() => setCurrentTab('wallet')}>
             <Icons.Wallet /> <span>Wallet</span>
           </a>
-          <a href="#" className={`nav-item ${currentTab === 'trust' ? 'active' : ''}`} onClick={() => setCurrentTab('trust')}>
+          <a href="#" className={`nav-item ${currentTab === 'trust' ? 'active' : ''}`} style={OWNER_MANAGED_LAUNCH ? { display: 'none' } : undefined} onClick={() => setCurrentTab('trust')}>
             <Icons.Trust /> <span>Trust & KYC</span>
           </a>
-          <a href="#" className={`nav-item ${currentTab === 'escrow' ? 'active' : ''}`} onClick={() => setCurrentTab('escrow')}>
+          <a href="#" className={`nav-item ${currentTab === 'escrow' ? 'active' : ''}`} style={OWNER_MANAGED_LAUNCH ? { display: 'none' } : undefined} onClick={() => setCurrentTab('escrow')}>
             <Icons.Escrow /> <span>Escrow Engine</span>
           </a>
         </nav>
@@ -374,7 +377,7 @@ export default function App({ initialTab = 'dashboard' }) {
           <img className="user-avatar" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200" alt="User avatar" />
           <div className="user-info">
             <span className="user-name">{user.name}</span>
-            <span className="user-trust-badge">🛡️ {user.trustScore}% Trust Score</span>
+            <span className="user-trust-badge">🛡️ {OWNER_MANAGED_LAUNCH ? "Owner-reviewed trading" : user.trustScore + "% Trust Score"}</span>
           </div>
           <button
             className="action-btn"
@@ -394,7 +397,7 @@ export default function App({ initialTab = 'dashboard' }) {
             <h1 className="page-title">
               {currentTab === 'dashboard' && 'UNN Campus Hub'}
               {currentTab === 'marketplace' && 'UNN Student Marketplace'}
-              {currentTab === 'laptops' && 'Laptop Exchange • Buy / Sell / Swap'}
+              {currentTab === 'laptops' && 'Phone & Laptop Exchange • Owner-Managed Trading'}
               {currentTab === 'services' && 'Student Service Economy'}
               {currentTab === 'directory' && 'Nsukka Business Directory'}
               {currentTab === 'wallet' && 'CampusVerse Wallet'}

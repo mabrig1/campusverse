@@ -1,5 +1,6 @@
 // Vercel hosts the backend now; Railway is no longer required.
-// VITE_API_URL can override this in a deployment environment.
+// VITE_API_URL may opt into a reviewed Cloudflare gateway at https://edge-api.campusverse.store/api.
+// Keep it unset during staging to continue using the Vercel API origin.
 const API_BASE = (import.meta.env.VITE_API_URL || "https://campusverse-backend.vercel.app/api").replace(/\/$/, "");
 
 let authToken = null;
@@ -25,9 +26,47 @@ export const api = {
     method: "POST", body: file, headers: { "Content-Type": "application/octet-stream", "X-Ownership-Document-Type": type },
   }),
   removeLaptopOwnershipProof: (id) => request("/laptops/" + encodeURIComponent(id) + "/ownership-proof", { method: "DELETE" }),
+  getPilotShopMode: () => request("/store/pilot"),
+  sellerRespondStoreQuote: (id, decision) => request("/laptops/" + encodeURIComponent(id) + "/store-quote", {
+    method: "PATCH", body: JSON.stringify({decision}),
+  }),
+  adminGetStoreIntakes: () => request("/admin/v2/store-intake"),
+  adminGetStoreInventory: () => request("/admin/v2/store-inventory"),
+  adminOfferStorePurchase: (id, payload) => request("/admin/v2/store-intake/" + encodeURIComponent(id) + "/quote", {
+    method: "POST", body: JSON.stringify(payload),
+  }),
+  adminAcquireIntoStore: (id, payload) => request("/admin/v2/store-intake/" + encodeURIComponent(id) + "/acquire", {
+    method: "POST", body: JSON.stringify(payload),
+  }),
+  adminActivateOwnStock: (id,payload) => request("/admin/v2/store-inventory/" + encodeURIComponent(id) + "/activate", {
+    method: "POST", body: JSON.stringify(payload),
+  }),
+  adminSetStorePrice: (id, price) => request("/admin/v2/store-inventory/" + encodeURIComponent(id) + "/price", {
+    method: "PATCH", body: JSON.stringify({price}),
+  }),
+  adminSetStoreStatus: (id,status) => request("/admin/v2/store-inventory/" + encodeURIComponent(id) + "/status", {
+    method: "PATCH", body: JSON.stringify({status}),
+  }),
+  issueSellerVideoChallenge: (id) => request("/laptops/" + encodeURIComponent(id) + "/seller-video-challenge", { method: "POST", body: "{}" }),
+  uploadSellerIntentVideo: (id, blob, challenge) => request("/laptops/" + encodeURIComponent(id) + "/seller-video", {
+    method: "POST", body: blob,
+    headers: { "Content-Type": "application/octet-stream", "X-Seller-Video-Challenge": challenge,
+      "X-Seller-Video-Consent": "yes", "X-Seller-Video-Mime": blob.type.split(";")[0] },
+  }),
+  removeSellerIntentVideo: (id) => request("/laptops/" + encodeURIComponent(id) + "/seller-video", { method: "DELETE" }),
+  adminDownloadSellerIntentVideo: async id => {
+    const res = await fetch(API_BASE + "/admin/v2/laptop-ownership/" + encodeURIComponent(id) + "/seller-video", {
+      headers: authToken ? { Authorization: "Bearer " + authToken } : {}, cache: "no-store",
+    });
+    if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Unable to retrieve the seller video"); }
+    return res.blob();
+  },
   reportLaptopSafety: (id, payload) => request("/laptops/" + encodeURIComponent(id) + "/safety-report", { method: "POST", body: JSON.stringify(payload) }),
   adminGetOwnershipQueue: () => request("/admin/v2/laptop-ownership"),
+  adminMatchDeviceIdentifier: (id,identifier) => request("/admin/v2/laptop-ownership/" + encodeURIComponent(id) + "/match-identifier", { method: "POST", body: JSON.stringify({identifier}) }),
   adminGetLaptopReports: () => request("/admin/v2/laptop-reports"),
+  adminGetDeviceOffers: () => request("/admin/v2/device-offers"),
+  adminDecideDeviceOffer: (id, payload) => request("/admin/v2/device-offers/" + encodeURIComponent(id) + "/decision", { method: "POST", body: JSON.stringify(payload) }),
   adminReviewLaptopOwnership: (id, payload) => request("/admin/v2/laptop-ownership/" + encodeURIComponent(id) + "/review", { method: "POST", body: JSON.stringify(payload) }),
   adminResolveLaptopReport: (id) => request("/admin/v2/laptop-reports/" + encodeURIComponent(id) + "/resolve", { method: "POST", body: "{}" }),
   adminDownloadLaptopEvidence: async (id) => {

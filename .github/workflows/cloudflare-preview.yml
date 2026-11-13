@@ -1,0 +1,61 @@
+name: Cloudflare staging previews (manual only)
+on:
+  workflow_dispatch:
+    inputs:
+      api_preview_url:
+        description: 'Exact API preview URL: https://campusverse-edge-api-preview.<account>.workers.dev/api'
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: campusverse-cloudflare-preview
+  cancel-in-progress: false
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    environment: cloudflare-preview
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install pinned dependencies
+        run: npm ci
+      - name: Edge policy and preview URL tests
+        run: |
+          node --test workers/edge-api/src/index.test.js
+          node --test workers/edge-api/prepare-staging.test.mjs
+          node workers/edge-api/validate-config.mjs
+      - name: Validate the requested preview URL
+        env:
+          CAMPUSVERSE_PREVIEW_API_URL: ${{ inputs.api_preview_url }}
+        run: node -e "import('./workers/edge-api/prepare-staging.mjs').then(m => m.checkedPreviewUrl(process.env.CAMPUSVERSE_PREVIEW_API_URL))"
+      - name: Deploy preview API Worker to workers.dev only
+        run: npx --yes wrangler@4.45.0 deploy --config workers/edge-api/wrangler.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Smoke-test the preview API Worker
+        env:
+          CAMPUSVERSE_PREVIEW_API_URL: ${{ inputs.api_preview_url }}
+        run: |
+          BASE="${CAMPUSVERSE_PREVIEW_API_URL%/api}"
+          curl --fail --show-error --silent --max-time 20 "$BASE/_edge/health"
+          curl --fail --show-error --silent --max-time 20 "$CAMPUSVERSE_PREVIEW_API_URL/marketplace-categories" -o /dev/null
+      - name: Build frontend against the selected API Worker
+        env:
+          VITE_API_URL: ${{ inputs.api_preview_url }}
+        run: npm run build --workspace=frontend
+      - name: Apply staging-only CSP for this Worker
+        env:
+          CAMPUSVERSE_PREVIEW_API_URL: ${{ inputs.api_preview_url }}
+        run: node workers/edge-api/prepare-staging.mjs
+      - name: Deploy staging frontend assets to workers.dev only
+        run: npx --yes wrangler@4.45.0 deploy --config frontend/wrangler.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

@@ -19,14 +19,33 @@ export function normalizedSerial(input) {
   return serial;
 }
 
-export function serialFingerprint(serial, key) {
-  return createHmac("sha256", key).update("campusverse:laptop:serial:v1:" + normalizedSerial(serial)).digest("hex");
+export function normalizedDeviceIdentifier(deviceType, input) {
+  if (deviceType === "LAPTOP") return normalizedSerial(input);
+  if (deviceType !== "PHONE") throw new Error("Invalid device type");
+  const imei = String(input ?? "").trim().replace(/[\s-]/g, "");
+  if (!/^\d{15}$/.test(imei)) throw new Error("Enter the device’s 15-digit IMEI from Settings or its original box");
+  const digits = [...imei].map(Number);
+  const checksum = digits.reduce((sum, digit, index) => {
+    if (index % 2 === 1) { const x = digit * 2; return sum + (x > 9 ? x - 9 : x); }
+    return sum + digit;
+  }, 0);
+  if (checksum % 10 !== 0) throw new Error("Invalid IMEI check digit; recheck the phone number");
+  return imei;
 }
 
-export function recognizedImage(bytes) {
+export function serialFingerprint(serial, key, deviceType = "LAPTOP") {
+  const value = normalizedDeviceIdentifier(deviceType, serial);
+  return createHmac("sha256", key).update("campusverse:device:identifier:v2:" + deviceType + ":" + value).digest("hex");
+}
+
+export function recognizedOwnershipDocument(bytes) {
   if (!Buffer.isBuffer(bytes) || bytes.length < 20 || bytes.length > MAX_EVIDENCE_BYTES) return null;
   const isPng = bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]));
   if (isPng) return "image/png";
+  // A document PDF is accepted as private evidence, never rendered inline.
+  if (bytes.subarray(0,5).toString("ascii") === "%PDF-" &&
+      bytes.subarray(Math.max(0,bytes.length-72)).toString("latin1").includes("%%EOF"))
+    return "application/pdf";
   const isJpeg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff &&
     bytes[bytes.length - 2] === 0xff && bytes[bytes.length - 1] === 0xd9;
   if (isJpeg) return "image/jpeg";
@@ -47,3 +66,20 @@ export function decryptEvidence({ cipherText, iv, authTag }, key, listingId) {
   decipher.setAuthTag(authTag);
   return Buffer.concat([decipher.update(cipherText), decipher.final()]);
 }
+
+
+// Browser-camera proof is encrypted at rest; it is never publicly hosted.
+// This recognizes container headers only; manual review is still required.
+export const MAX_SELLER_VIDEO_BYTES = 2 * 1024 * 1024;
+export function recognizedSellerVideo(bytes) {
+  if (!Buffer.isBuffer(bytes) || bytes.length < 16 || bytes.length > MAX_SELLER_VIDEO_BYTES) return null;
+  if (bytes.subarray(0,4).equals(Buffer.from([0x1a,0x45,0xdf,0xa3]))) return "video/webm";
+  if (bytes.subarray(4,8).toString("ascii") === "ftyp") return "video/mp4";
+  return null;
+}
+export function sellerVideoAAD(listingId) {
+  return "seller-intent-video:" + listingId;
+}
+
+// Legacy alias for existing callers; prefer the document-specific name.
+export const recognizedImage = recognizedOwnershipDocument;

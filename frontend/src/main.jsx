@@ -1,14 +1,16 @@
-import { StrictMode, useState } from 'react'
+import { StrictMode, Suspense, lazy, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/react'
 import './index.css'
 import './EarnWhileYouLearn.css'
 import './storefront.css'
-import App from './App.jsx'
-import CampusVerseStorefront from './CampusVerseStorefront.jsx'
-import ReferralPortal from './ReferralPortal.jsx'
-import AdminPortal from './AdminPortal.jsx'
+// Keep the public storefront fast on Nigerian mobile connections: avoid loading
+// admin, referral and dashboard JavaScript until those screens are requested.
+const App = lazy(() => import('./App.jsx'))
+const CampusVerseStorefront = lazy(() => import('./CampusVerseStorefront.jsx'))
+const ReferralPortal = lazy(() => import('./ReferralPortal.jsx'))
+const AdminPortal = lazy(() => import('./AdminPortal.jsx'))
 
 function CampusVerseRoot() {
   const path = window.location.pathname.toLowerCase()
@@ -16,9 +18,9 @@ function CampusVerseRoot() {
   if (path.startsWith('/admin')) return <AdminPortal />
 
   const [storefront, setStorefront] = useState(true)
-  const [initialTab, setInitialTab] = useState('dashboard')
+  const [initialTab, setInitialTab] = useState('laptops')
   return storefront ? (
-    <CampusVerseStorefront onLogin={(tab = 'dashboard') => { setInitialTab(tab); setStorefront(false) }} />
+    <CampusVerseStorefront onLogin={(tab = 'laptops') => { setInitialTab(tab); setStorefront(false) }} />
   ) : (
     <App initialTab={initialTab} />
   )
@@ -32,7 +34,9 @@ if ('serviceWorker' in navigator) {
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <CampusVerseRoot />
+    <Suspense fallback={<div role="status" style={{padding: 32, color: '#065f46', fontFamily: 'system-ui, sans-serif'}}>Loading CampusVerse…</div>}>
+      <CampusVerseRoot />
+    </Suspense>
     <Analytics />
     <SpeedInsights />
   </StrictMode>,

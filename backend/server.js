@@ -13,6 +13,11 @@ import { z } from "zod";
 import { prisma } from "./src/db.js";
 import { registerLaptopRoutes } from "./src/laptop-routes.js";
 import { registerLaptopOwnershipRoutes } from "./src/laptop-ownership-routes.js";
+import { registerSellerIntentRoutes } from "./src/seller-intent-routes.js";
+import { registerDeviceOfferAdminRoutes } from "./src/device-offer-admin-routes.js";
+import { registerPersonalStoreRoutes } from "./src/personal-store-routes.js";
+import { ownerManagedGuard, ownerManagedLaunch } from "./src/owner-managed-launch.js";
+import { PERSONAL_STORE_ONLY } from "./src/store-pilot.js";
 import { signToken, requireAuth, optionalAuth } from "./src/auth.js";
 import { verifyGoogleIdToken, GoogleAuthNotConfiguredError } from "./src/google-auth.js";
 import { chargeWallet, creditWallet, InsufficientFundsError } from "./src/wallet.js";
@@ -34,6 +39,7 @@ const PORT = process.env.PORT || 5000;
 app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 app.use(cors());
 app.use(express.json());
+app.use(ownerManagedGuard);
 
 function handleError(res, err) {
   if (err instanceof InsufficientFundsError) {
@@ -85,7 +91,7 @@ function serializeProduct(product, { favorited = false } = {}) {
     promotionExpiresAt: isPromoted ? product.promotionExpiresAt : null,
     listingAge: listingAge(product.createdAt),
     favorited,
-    whatsappLink: whatsappLink(
+    whatsappLink: ownerManagedLaunch ? null : whatsappLink(
       seller.phone,
       `Hi, I found your listing "${product.title}" on CampusVerse and I'm interested in this item.`
     ),
@@ -94,7 +100,7 @@ function serializeProduct(product, { favorited = false } = {}) {
       name: seller.name,
       verified: seller.studentIdVerified,
       trustScore: trust.trustScore,
-      phone: seller.phone,
+      phone: ownerManagedLaunch ? null : seller.phone,
       avatarUrl:
         seller.avatarUrl ||
         "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200",
@@ -116,6 +122,7 @@ async function serializeUser(user) {
     hostel: user.hostel,
     phone: user.phone,
     role: user.role,
+    storeIntent: user.storeIntent,
     phoneVerified: user.phoneVerified,
     emailVerified: user.emailVerified,
     studentIdVerified: user.studentIdVerified,
@@ -144,6 +151,7 @@ const registerSchema = z.object({
   regNo: z.string().optional(),
   hostel: z.string().optional(),
   phone: z.string().optional(),
+  storeIntent: z.enum(["BUY_FROM_STORE","SELL_TO_STORE","BOTH"]).default("BUY_FROM_STORE"),
 });
 
 app.post("/api/auth/register", async (req, res) => {
@@ -151,7 +159,7 @@ app.post("/api/auth/register", async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid input" });
   }
-  const { name, email, password, regNo, hostel, phone } = parsed.data;
+  const { name, email, password, regNo, hostel, phone, storeIntent } = parsed.data;
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
@@ -167,6 +175,7 @@ app.post("/api/auth/register", async (req, res) => {
       regNo,
       hostel,
       phone,
+      storeIntent,
       phoneVerified: Boolean(phone),
       emailVerified: true,
       wallet: { create: { balance: 0 } },
@@ -439,6 +448,10 @@ async function expireStalePromotions() {
 }
 
 app.get("/api/products", optionalAuth, async (req, res) => {
+  // This previous multi-vendor product directory is intentionally dormant.
+  // Only registered CampusVerse shop inventory may appear in the pilot.
+  if (PERSONAL_STORE_ONLY) return res.json({items:[],page:1,hasMore:false,total:0,
+    message:"The personal store pilot sells verified used laptops and iPhones through /api/laptops."});
   await expireStalePromotions();
 
   const {
@@ -509,6 +522,7 @@ app.get("/api/products", optionalAuth, async (req, res) => {
 });
 
 app.get("/api/products/:id", optionalAuth, async (req, res) => {
+  if (PERSONAL_STORE_ONLY) return res.status(404).json({error:"Independent vendor product listings are disabled during the single-store pilot"});
   const product = await prisma.product.update({
     where: { id: req.params.id },
     data: { viewCount: { increment: 1 } },
@@ -877,6 +891,9 @@ app.get("/api/directory", (req, res) => res.json(mockDirectory));
 // Dedicated buy/sell/swap exchange; no funds or title move when an offer is accepted.
 registerLaptopRoutes(app);
 registerLaptopOwnershipRoutes(app);
+registerSellerIntentRoutes(app);
+registerDeviceOfferAdminRoutes(app);
+registerPersonalStoreRoutes(app);
 
 // Catches anything that reaches here — including async rejections forwarded
 // by express-async-errors — so a bug always returns a fast, clean JSON 500
