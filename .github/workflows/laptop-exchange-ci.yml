@@ -11,6 +11,9 @@ on:
       - 'backend/src/laptop-ownership-*.js'
       - 'backend/src/seller-intent-routes.js'
       - 'backend/src/seller-intent-integration.test.js'
+      - 'backend/src/personal-store-integration.test.js'
+      - 'backend/src/personal-store-routes.js'
+      - 'backend/src/store-pilot.js'
       - 'backend/server.js'
       - 'backend/src/device-offer-admin-routes.js'
       - 'backend/src/trading-owner.js'
@@ -62,6 +65,8 @@ jobs:
           node --check backend/src/laptop-ownership-routes.js
           node --check backend/src/laptop-ownership-crypto.js
           node --check backend/src/seller-intent-routes.js
+          node --check backend/src/personal-store-routes.js
+          node --check backend/src/store-pilot.js
           node --check backend/src/device-offer-admin-routes.js
           node --check backend/src/trading-owner.js
           node --check backend/src/owner-managed-launch.js
@@ -71,7 +76,9 @@ jobs:
         env:
           VERCEL: '1'
           TRADING_OWNER_EMAIL: owner-integration-test@example.test
-        run: node --test backend/src/seller-intent-integration.test.js
+        run: |
+          node --test backend/src/seller-intent-integration.test.js
+          node --test backend/src/personal-store-integration.test.js
       - name: Cloudflare Worker safety and config tests
         run: |
           node --check workers/edge-api/src/index.js

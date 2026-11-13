@@ -152,3 +152,33 @@ A student selling or swapping a used laptop or iPhone must submit **both** lawfu
 **Operational limit:** The upload signature and single-use challenge alone cannot prove the file is playable, contains a real person, was freshly filmed, or establishes rightful ownership. This requires actual reviewer inspection and, for valuable devices, physical handover checks. The current 2 MB limit is intended for a short, low-resolution clip because serverless request payloads are size-constrained. If longer recordings are needed, use secure, privately encrypted direct uploads to reviewed object storage rather than exposing videos in public R2 buckets.
 
 **Safe first release:** This branch adds a PostgreSQL migration which intentionally resets old document-only REVIEWED listings to PENDING and invalidates open offers; back up and review data before ever applying it in production. Keep PR #10 open until buyer/seller/owner staging tests and privacy controls pass. The existing live site is unchanged by this commit.
+
+
+## First launch — ONE CampusVerse-owned physical store (personal pilot)
+
+**Business rule: Students do not open stores and do not sell directly to other students.** During the owner's multi-month test run, all transactions are handled by the single designated ADMIN account, configured with `TRADING_OWNER_EMAIL`. `CAMPUSVERSE_PERSONAL_STORE_ONLY` defaults to TRUE and is also documented in backend/.env.example. There is no automatic multi-store activation after a particular date.
+
+The website now sells only devices acquired into owner stock, focused on used laptops and iPhones; the generic printing/services/affiliate marketplace is not part of the first-launch homepage. Registration presents `BUY_FROM_STORE`, `SELL_TO_STORE` or `BOTH` as **intention preferences**, never store-creation rights. Google and earlier accounts can still sell directly to the store.
+
+**Selling to CampusVerse**
+1. Student signs in and creates a *private intake submission*, not a publicly visible advertisement.
+2. Student submits lawful receipt/transfer evidence and a fresh challenged selfie video; only the owner can review private media.
+3. Owner inspects the actual device and checks provenance/IMEI or serial, manually approving the evidence. This is not police/stolen-device clearance.
+4. Owner makes a private quote from the Store Desk; seller explicitly accepts or declines. The offer does not transfer money or ownership.
+5. On payment and physical custody, owner confirms the agreed price, inspection and handover in the Store Desk. A single PostgreSQL transaction CLOSES the student intake and creates a **new owner-owned inventory record**, linked to the original seller's audit evidence. The public listing appears only after acquisition.
+6. Original seller cannot reopen an acquired device as a peer listing. Video/receipt deletion requests for completed purchases go through the owner and documented data-retention process; a buyer never sees these files.
+
+**Buying from CampusVerse**
+- Visitors can see only `sellerId = configured owner`, `storeInventory = true`, `storeAcquiredAt != NULL`, `status = ACTIVE` and `ownershipStatus = REVIEWED`. Missing owner configuration fails CLOSED instead of exposing other students' devices.
+- Customer submits an offer to owner stock. The designated owner approves or accepts it, and records payment/inspection/handover; no automatic wallet, escrow, self-service purchase or student-to-student deal is implemented.
+- For a swap, the student's trade-in must itself have approved ownership evidence; on completion it is transferred into owner inventory in PAUSED status for further owner inspection/pricing before resale.
+- Old generic vendor listings are hidden by the API during this launch. The site does not advertise other owners' goods as store-owned.
+
+**Operations**
+- `GET /api/store/pilot` reports the pilot mode.
+- `GET /api/admin/v2/store-intake` lists private seller submissions, and `POST /api/admin/v2/store-intake/:id/quote` sends an owner price.
+- `PATCH /api/laptops/:id/store-quote` lets the seller accept or decline.
+- `POST /api/admin/v2/store-intake/:id/acquire` records the seller's agreement, inspection, payment and custody, closing the old private listing and creating owner stock atomically.
+- `GET /api/admin/v2/store-inventory`, `POST .../:id/activate`, `PATCH .../:id/price` and `PATCH .../:id/status` support own stock without third-party storefronts.
+
+**Release caveats:** The migration hides all pre-existing student device listings (storeInventory defaults false) and invalidates open peer-to-peer offers. Review and back up the live database before any production migration. No bank-account verification, actual cash disbursement, signed receipt generation, stolen-device database access or legal title verification is claimed. The owner must obtain real payment/handovers, custody records and appropriate privacy/retention policies before public rollout. The single-store code is on PR #10 and remains unmerged/undeployed.
