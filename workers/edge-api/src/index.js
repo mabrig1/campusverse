@@ -73,7 +73,9 @@ async function boundedPublicCopy(response, ttl) {
       if (done) break;
       size += value.byteLength;
       if (size > MAX_CACHED_BODY_BYTES) {
-        await reader.cancel("Metadata exceeds the cache limit");
+        // Cancelling one tee branch can wait for the other branch to finish.
+        // Never await here: the visitor's untouched response is still streaming.
+        void reader.cancel("Metadata exceeds the cache limit").catch(() => {});
         return null;
       }
       chunks.push(value);
@@ -91,7 +93,8 @@ async function boundedPublicCopy(response, ttl) {
     headers.set("x-content-type-options", "nosniff");
     return new Response(bytes, { status: response.status, statusText: response.statusText, headers });
   } catch {
-    await reader.cancel("Cache read failed").catch(() => {});
+    // Do not delay serving the original response while its other branch runs.
+    void reader.cancel("Cache read failed").catch(() => {});
     return null;
   }
 }
