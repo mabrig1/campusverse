@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "./api";
 
 const LIMIT_BYTES = 2 * 1024 * 1024;
-const RECORDING_MS = 8000;
+const RECORDING_MS = 15000;
 function selectCameraFormat() {
   if (typeof MediaRecorder === "undefined") return null;
   for (const type of [
@@ -146,7 +146,7 @@ export default function SellerIntentVideo({ listing, onComplete }) {
 
   return <section className="cv-laptop-proof-box" aria-label="Seller authorisation video">
     <h4>Step 2 — Record your seller-authorisation selfie video</h4>
-    <p><b>Required before management approval.</b> This fresh 8-second video shows you personally initiated the sale or swap of your {listing.brand} {listing.model}. The video and its challenge are private to the CampusVerse trading desk. A video does not independently prove your identity or lawful ownership.</p>
+    <p><b>Required before management approval.</b> This fresh approximately 15-second video shows you personally initiated the sale or swap of your {listing.brand} {listing.model}. The video and its challenge are private to the CampusVerse trading desk. A video does not independently prove your identity or lawful ownership.</p>
     <p>Recording is encrypted, limited to 2 MB and reviewed manually. It is not published to buyers, used for automated facial recognition or shared with advertisers. Avoid showing identity numbers, payment cards or other people.</p>
     <div style={{ display:"flex", gap:10, flexWrap:"wrap", alignItems:"center", marginBottom:12 }}>
       <button style={actionButton} type="button" disabled={loading || recording} onClick={getChallenge}>
@@ -162,7 +162,7 @@ export default function SellerIntentVideo({ listing, onComplete }) {
         <input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/>
         I confirm that I am voluntarily recording this video to authorise my device listing and consent to its restricted storage and manual review by CampusVerse management.
       </label>
-      {recording && <p role="status">🔴 Recording with camera and microphone (approximately 8 seconds)…</p>}
+      {recording && <p role="status">🔴 Recording with camera and microphone (approximately 15 seconds)…</p>}
       <div style={{display:"flex",flexWrap:"wrap",gap:9,marginTop:12}}>
         <button type="button" style={actionButton} onClick={startRecording} disabled={!consent || loading || recording}>
           {recording ? "Recording…" : "2. Record live selfie video"}
