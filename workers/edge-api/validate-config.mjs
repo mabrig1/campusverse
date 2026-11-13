@@ -16,5 +16,6 @@ assert(existsSync("frontend/public/_headers"));
 const headers = readFileSync("frontend/public/_headers", "utf8");
 assert.match(headers, /Content-Security-Policy:/);
 assert.match(headers, /\/assets\/\*[\s\S]+immutable/);
-assert.match(headers, /\/index\.html[\s\S]+no-store/);
+assert.match(headers, /\/\*[\s\S]+Cache-Control: no-store/);
+assert.match(headers, /! Cache-Control/);
 console.log("Cloudflare staging Worker configurations validated without credentials.");

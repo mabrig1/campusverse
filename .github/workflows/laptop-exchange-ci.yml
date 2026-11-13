@@ -73,3 +73,7 @@ jobs:
         run: npm run test --workspace=frontend
       - name: Frontend production build
         run: npm run build --workspace=frontend
+      - name: Wrangler dry-run without Cloudflare credentials (staging only)
+        run: |
+          npx --yes wrangler@4.45.0 deploy --dry-run --config workers/edge-api/wrangler.jsonc
+          npx --yes wrangler@4.45.0 deploy --dry-run --config frontend/wrangler.jsonc
