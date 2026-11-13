@@ -1,0 +1,34 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { randomBytes } from "node:crypto";
+import { evidenceKey, normalizedSerial, serialFingerprint, recognizedImage, encryptEvidence, decryptEvidence } from "./laptop-ownership-crypto.js";
+
+test("serial values normalize and get a private, deterministic fingerprint", () => {
+  const key = randomBytes(32);
+  assert.equal(normalizedSerial(" 5cg-123-abcd "), "5CG123ABCD");
+  assert.equal(serialFingerprint("5cg-123-abcd", key), serialFingerprint("5CG123ABCD", key));
+  assert.notEqual(serialFingerprint("5CG123ABCD", key), serialFingerprint("5CG123ABCE", key));
+  assert.throws(() => normalizedSerial(""), /valid/);
+  assert.throws(() => normalizedSerial("!!!"), /valid/);
+});
+test("encryption is authenticated to the listing and tampering fails", () => {
+  const key = randomBytes(32), bytes = Buffer.from("private receipt");
+  const encrypted = encryptEvidence(bytes, key, "listing-1");
+  assert.notDeepEqual(encrypted.cipherText, bytes);
+  assert.deepEqual(decryptEvidence(encrypted, key, "listing-1"), bytes);
+  assert.throws(() => decryptEvidence(encrypted, key, "listing-2"));
+  const tampered = { ...encrypted, cipherText: Buffer.from(encrypted.cipherText) };
+  tampered.cipherText[0] ^= 1;
+  assert.throws(() => decryptEvidence(tampered, key, "listing-1"));
+});
+test("storage fails closed without a correctly formatted encryption key", () => {
+  assert.throws(() => evidenceKey({}), /not configured/);
+  assert.throws(() => evidenceKey({ LAPTOP_PROOF_ENCRYPTION_KEY_BASE64: "123" }), /not configured/);
+  const key = randomBytes(32); assert.deepEqual(evidenceKey({ LAPTOP_PROOF_ENCRYPTION_KEY_BASE64: key.toString("base64") }), key);
+});
+test("only small JPEG or PNG proof photographs are allowed", () => {
+  assert.equal(recognizedImage(Buffer.from("<svg><script>alert(1)</script></svg>")), null);
+  assert.equal(recognizedImage(Buffer.from("%PDF-1.7 test")), null);
+  assert.equal(recognizedImage(Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]), Buffer.alloc(16)])), "image/png");
+  assert.equal(recognizedImage(Buffer.concat([Buffer.from([255,216,255]),Buffer.alloc(20),Buffer.from([255,217])])), "image/jpeg");
+});

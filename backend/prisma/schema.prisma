@@ -43,6 +43,7 @@ model User {
   promotions Promotion[]
   laptopListings LaptopListing[] @relation("LaptopListingsBySeller")
   laptopOffers LaptopOffer[] @relation("LaptopOffersByBuyer")
+  laptopSafetyReports LaptopSafetyReport[] @relation("LaptopReportsByUser")
 }
 
 model Wallet {
@@ -217,6 +218,30 @@ enum LaptopOfferType {
   BUY
   SWAP
 }
+enum OwnershipReviewStatus {
+  NOT_SUBMITTED
+  PENDING
+  REVIEWED
+  NEEDS_MORE_INFO
+  REJECTED
+  FLAGGED
+  REVOKED
+}
+enum OwnershipDocumentType {
+  PURCHASE_RECEIPT
+  BILL_OF_SALE
+  ORGANISATION_RELEASE
+}
+enum LaptopReportReason {
+  SUSPECTED_STOLEN
+  FALSE_DETAILS
+  LOCKED_DEVICE
+  OTHER
+}
+enum LaptopReportStatus {
+  OPEN
+  RESOLVED
+}
 enum LaptopOfferStatus {
   PENDING
   ACCEPTED
@@ -240,8 +265,12 @@ model LaptopListing {
   description      String              @default("")
   imageUrl         String?
   serialLast4      String?
+  serialFingerprint String?
   lockStatus       LaptopLockStatus    @default(NOT_CHECKED)
   ownershipDeclared Boolean           @default(false)
+  ownershipStatus OwnershipReviewStatus @default(NOT_SUBMITTED)
+  ownershipReviewedAt DateTime?
+  ownershipReviewNote String?
   price            Float
   allowSwap        Boolean             @default(false)
   location         String
@@ -250,6 +279,11 @@ model LaptopListing {
   updatedAt        DateTime            @updatedAt
   incomingOffers   LaptopOffer[]       @relation("TargetLaptopOffers")
   outgoingSwapOffers LaptopOffer[]     @relation("OfferedLaptopOffers")
+  ownershipEvidence LaptopOwnershipEvidence?
+  ownershipReviews LaptopOwnershipReview[]
+  safetyReports LaptopSafetyReport[]
+  @@index([serialFingerprint])
+  @@index([ownershipStatus])
   @@index([sellerId, status])
   @@index([status, createdAt])
 }
@@ -271,4 +305,45 @@ model LaptopOffer {
   updatedAt       DateTime          @updatedAt
   @@index([targetId, status])
   @@index([buyerId, status])
+}
+
+model LaptopOwnershipEvidence {
+  id          String                @id @default(cuid())
+  listing     LaptopListing         @relation(fields: [listingId], references: [id])
+  listingId   String                @unique
+  documentType OwnershipDocumentType
+  cipherText  Bytes
+  iv          Bytes
+  authTag     Bytes
+  mimeType    String
+  byteLength  Int
+  uploadedAt  DateTime              @default(now())
+}
+
+model LaptopOwnershipReview {
+  id               String                @id @default(cuid())
+  listing          LaptopListing         @relation(fields: [listingId], references: [id])
+  listingId        String
+  reviewerId       String
+  action           OwnershipReviewStatus
+  note             String
+  serialMatched    Boolean               @default(false)
+  provenanceChecked Boolean              @default(false)
+  createdAt        DateTime              @default(now())
+  @@index([listingId, createdAt])
+}
+
+model LaptopSafetyReport {
+  id          String             @id @default(cuid())
+  listing     LaptopListing      @relation(fields: [listingId], references: [id])
+  listingId   String
+  reporter    User               @relation("LaptopReportsByUser", fields: [reporterId], references: [id])
+  reporterId  String
+  reason      LaptopReportReason
+  detail      String
+  status      LaptopReportStatus @default(OPEN)
+  createdAt   DateTime           @default(now())
+  resolvedAt  DateTime?
+  @@unique([listingId, reporterId])
+  @@index([status, createdAt])
 }
