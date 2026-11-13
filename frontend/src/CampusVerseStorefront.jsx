@@ -55,7 +55,7 @@ export default function CampusVerseStorefront({ onLogin }) {
           <button className={active === 'home' ? 'active' : ''} onClick={() => scrollTo('home')}>Home</button>
           <button className={active === 'services' ? 'active' : ''} onClick={() => scrollTo('services')}>Services</button>
           <button className={active === 'shop' ? 'active' : ''} onClick={() => scrollTo('shop')}>Shop</button>
-          <button className={active === 'laptops' ? 'active' : ''} onClick={() => scrollTo('laptops')}>Laptop Exchange</button>
+          <button className={active === 'laptops' ? 'active' : ''} onClick={() => scrollTo('laptops')}>Phones & Laptops</button>
           <button className={active === 'partners' ? 'active' : ''} onClick={() => scrollTo('partners')}>Earn While You Learn</button>
         </nav>
         <div className="store-nav-actions">
@@ -68,21 +68,21 @@ export default function CampusVerseStorefront({ onLogin }) {
         <section id="home" className="store-hero">
           <div className="hero-copy">
             <span className="eyebrow">YOUR CAMPUS. YOUR MARKETPLACE. YOUR OPPORTUNITY.</span>
-            <h1>Need it on campus? <em>Start here.</em></h1>
-            <p>From academic support and printing to phones, accessories and student earning opportunities, CampusVerse brings the campus economy into one simple place.</p>
+            <h1>Buy. Sell. <em>Swap your phone or laptop.</em></h1>
+            <p>Buy used phones and laptops, sell devices you own, or negotiate a swap. Every listing requires paperwork and your CampusVerse trading desk supervises deal approvals and handovers.</p>
             <div className="hero-actions">
-              <button className="store-primary large" onClick={() => scrollTo('services')}>Get academic support →</button>
-              <button className="store-outline large" onClick={() => scrollTo('shop')}>Shop gadgets & accessories</button>
+              <button className="store-primary large" onClick={() => onLogin("laptops")}>Browse phones & laptops →</button>
+              <button className="store-outline large" onClick={() => scrollTo("services")}>Academic services & printing</button>
             </div>
             <div className="hero-proof"><span>✓ Clear pricing</span><span>✓ Student-focused</span><span>✓ Campus-first marketplace</span></div>
           </div>
           <div className="hero-card">
             <span className="hero-mini">CAMPUSVERSE • ONE PLACE</span>
-            <h3>Stop searching. Start getting things done.</h3>
-            <div className="hero-stat"><b>6+</b><span>academic & document services</span></div>
-            <div className="hero-stat"><b>Gadgets</b><span>phones, power, audio & accessories</span></div>
-            <div className="hero-stat"><b>20%</b><span>qualifying partner commission*</span></div>
-            <small>*Referral commissions become payable only after official programme activation and qualifying-order verification.</small>
+            <h3>Trade a phone. Upgrade a laptop.</h3>
+            <div className="hero-stat"><b>Buy</b><span>Phones & laptops</span></div>
+            <div className="hero-stat"><b>Swap</b><span>Request an upgrade with a top-up</span></div>
+            <div className="hero-stat"><b>Sell</b><span>List devices for ownership review</span></div>
+            <small>Listings are reviewed, not guaranteed theft-free. Payments and handovers require manual confirmation.</small>
           </div>
         </section>
 
@@ -90,7 +90,7 @@ export default function CampusVerseStorefront({ onLogin }) {
           <button onClick={() => scrollTo('services')}><span>🎓</span><b>Academic Services</b><small>Support, research & printing</small></button>
           <button onClick={() => scrollTo('shop')}><span>📱</span><b>Gadgets</b><small>Phones & everyday electronics</small></button>
           <button onClick={() => scrollTo('shop')}><span>🔌</span><b>Accessories</b><small>Power, audio & cables</small></button>
-          <button onClick={() => scrollTo('laptops')}><span>💻</span><b>Laptop Exchange</b><small>Buy, sell & swap safely</small></button>
+          <button onClick={() => scrollTo('laptops')}><span>📱💻</span><b>Phones & Laptops</b><small>Buy, sell or swap</small></button>
           <button onClick={() => scrollTo('partners')}><span>🚀</span><b>Earn While You Learn</b><small>Refer. Serve. Grow.</small></button>
         </section>
 
@@ -100,11 +100,11 @@ export default function CampusVerseStorefront({ onLogin }) {
         </section>
 
         <section id="laptops" className="store-laptop-teaser">
-          <div><span className="eyebrow">NEW MAJOR FEATURE • CAMPUSVERSE LAPTOP EXCHANGE</span>
-            <h2>Upgrade your laptop. <em>Not your risk.</em></h2>
+          <div><span className="eyebrow">MAJOR FEATURE • MANAGED DEVICE MARKET</span>
+            <h2>Upgrade a phone or laptop. <em>Trade with care.</em></h2>
             <p>Buy, sell and swap used laptops in one student-focused marketplace. Compare processor and storage specs, disclose battery health and repair history, make cash or swap proposals, and follow a practical inspection checklist.</p>
             <div className="store-laptop-badges"><span>💻 Real listings</span><span>🔁 Swap offers</span><span>🛡️ Inspection guide</span><span>₦ Fair top-up calculator</span></div>
-            <button type="button" className="store-primary large" onClick={() => onLogin('laptops')}>Explore laptop exchange →</button>
+            <button type="button" className="store-primary large" onClick={() => onLogin('laptops')}>Start buying, selling or swapping →</button>
             <small>Listing details are provided by sellers, not independently verified. Offers do not transfer funds or ownership.</small>
           </div>
           <div className="store-laptop-visual"><span aria-hidden="true">💻</span><b>Buy • Sell • Swap</b><p>A better way to compare devices and agree to inspect before trading.</p></div>
@@ -147,7 +147,7 @@ export default function CampusVerseStorefront({ onLogin }) {
         <section className="trust-section"><div><span className="eyebrow">THE CAMPUSVERSE PROMISE</span><h2>A marketplace designed for campus life.</h2><p>Less friction. Clearer choices. More useful connections.</p></div><div className="trust-grid"><div><b>🔒 Safer</b><p>Clearer ordering and transaction workflows help reduce avoidable marketplace risk.</p></div><div><b>📍 Campus-first</b><p>Services and products are designed around student locations and everyday campus needs.</p></div><div><b>🤝 Connected</b><p>Students, vendors and partners can participate in one growing campus network.</p></div></div></section>
       </main>
 
-      <footer className="store-footer"><div><b>CampusVerse</b><p>The digital campus marketplace for academic services, products and student opportunities.</p></div><div><b>Explore</b><button onClick={() => scrollTo('services')}>Services</button><button onClick={() => scrollTo('shop')}>Shop</button><button onClick={() => scrollTo('laptops')}>Laptop Exchange</button><button onClick={() => scrollTo('partners')}>Earn While You Learn</button></div><div><b>Account</b><button onClick={onLogin}>Sign in</button><button onClick={onLogin}>Become a partner</button></div></footer>
+      <footer className="store-footer"><div><b>CampusVerse</b><p>The digital campus marketplace for academic services, products and student opportunities.</p></div><div><b>Explore</b><button onClick={() => scrollTo('services')}>Services</button><button onClick={() => scrollTo('shop')}>Shop</button><button onClick={() => scrollTo('laptops')}>Phone & Laptop Exchange</button><button onClick={() => scrollTo('partners')}>Earn While You Learn</button></div><div><b>Account</b><button onClick={onLogin}>Sign in</button><button onClick={onLogin}>Become a partner</button></div></footer>
       <div className="store-bottom">© {new Date().getFullYear()} CampusVerse · Mabrig campus commerce network</div>
     </div>
   );

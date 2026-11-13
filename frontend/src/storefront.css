@@ -13,3 +13,6 @@
 .category-strip{grid-template-columns:repeat(5,minmax(0,1fr))}
 @media(max-width:950px){.store-laptop-teaser{margin:15px 28px;grid-template-columns:1fr}.category-strip{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:620px){.store-laptop-teaser{margin:15px 18px;padding:27px}.store-laptop-visual{min-height:160px}.store-laptop-visual span{font-size:60px}.category-strip{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Owner-managed phone and laptop category on first launch */
+.cv-laptop-filter{grid-template-columns:2fr 1fr 1fr auto auto}@media(max-width:950px){.cv-laptop-filter{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:620px){.cv-laptop-filter{grid-template-columns:1fr}}

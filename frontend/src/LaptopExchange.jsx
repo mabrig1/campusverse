@@ -4,7 +4,7 @@ import { estimateTopUp } from './laptopValuation';
 import './LaptopExchange.css';
 
 const EMPTY = {
-  brand: '', model: '', processor: '', ramGb: '8', storageGb: '256',
+  deviceType: 'LAPTOP', brand: '', model: '', processor: '', ramGb: '8', storageGb: '256',
   storageType: 'SSD', condition: 'GOOD', batteryHealth: '',
   faults: 'None known', description: '', imageUrl: '', serialNumber: '',
   lockStatus: 'NOT_CHECKED', ownershipDeclared: false,
@@ -22,6 +22,7 @@ export default function LaptopExchange({ user }) {
   const [search, setSearch] = useState('');
   const [swapOnly, setSwapOnly] = useState(false);
   const [condition, setCondition] = useState('');
+  const [deviceTypeFilter, setDeviceTypeFilter] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -54,7 +55,7 @@ export default function LaptopExchange({ user }) {
       setError('');
       try {
         const [publicData, ownData, offerData] = await Promise.all([
-          api.getLaptopListings({ q: search, swap: swapOnly }),
+          api.getLaptopListings({ q: search, swap: swapOnly, deviceType: deviceTypeFilter }),
           api.getMyLaptops(),
           api.getMyLaptopOffers(),
         ]);
@@ -71,7 +72,7 @@ export default function LaptopExchange({ user }) {
     }
     load();
     return () => { cancelled = true; };
-  }, [search, swapOnly, refreshKey]);
+  }, [search, swapOnly, deviceTypeFilter, refreshKey]);
 
   const filtered = useMemo(
     () => items.filter(x => !condition || x.condition === condition),
@@ -156,8 +157,8 @@ export default function LaptopExchange({ user }) {
       <section className="cv-laptop-hero">
         <div>
           <div className="cv-laptop-eyebrow">CAMPUSVERSE • LAPTOP EXCHANGE</div>
-          <h2>Buy. Sell. <span>Swap smarter.</span></h2>
-          <p>A dedicated student laptop market with real listings, clear technical specifications, fair swap discussions and a safety-first inspection checklist.</p>
+          <h2>Buy. Sell. <span>Swap phones or laptops.</span></h2>
+          <p>Trade phones and laptops through the owner-managed CampusVerse desk. Proof of ownership is reviewed before listings appear and every offer needs approval before negotiation.</p>
           <div className="cv-laptop-actions">
             <button className="cv-laptop-primary" onClick={() => setView('browse')}>Browse laptops</button>
             <button className="cv-laptop-outline" onClick={() => setView('sell')}>List your laptop</button>
@@ -187,9 +188,10 @@ export default function LaptopExchange({ user }) {
 
       {view === 'browse' && (
         <section className="cv-laptop-pane">
-          <div className="cv-laptop-title"><div><h3>Available laptops</h3><p>Only listings with reviewed documents are visible. Paperwork can be forged: inspect devices in person.</p></div><button className="cv-laptop-small" onClick={reload}>Refresh</button></div>
+          <div className="cv-laptop-title"><div><h3>Available phones & laptops</h3><p>Only listings with reviewed documents are visible. Paperwork can be forged: inspect devices in person.</p></div><button className="cv-laptop-small" onClick={reload}>Refresh</button></div>
           <form className="cv-laptop-filter" onSubmit={e => { e.preventDefault(); setSearch(searchDraft.trim()); }}>
             <label className="cv-laptop-search"><span>Search brand, model or campus</span><input value={searchDraft} onChange={e => setSearchDraft(e.target.value)} placeholder="e.g. ThinkPad, HP, Nsukka" maxLength={100}/></label>
+            <label><span>Device</span><select value={deviceTypeFilter} onChange={e=>setDeviceTypeFilter(e.target.value)}><option value="">All devices</option><option value="PHONE">Phones</option><option value="LAPTOP">Laptops</option></select></label>
             <label><span>Condition</span><select value={condition} onChange={e => setCondition(e.target.value)}><option value="">All conditions</option>{Object.entries(conditions).map(([k,v]) => <option key={k} value={k}>{v}</option>)}</select></label>
             <label className="cv-laptop-check"><input type="checkbox" checked={swapOnly} onChange={e => setSwapOnly(e.target.checked)}/> Swaps accepted</label>
             <button type="submit" className="cv-laptop-primary">Search</button>
@@ -198,10 +200,10 @@ export default function LaptopExchange({ user }) {
             <div className="cv-laptop-cards">
               {filtered.map(item => (
                 <article className="cv-laptop-card" key={item.id}>
-                  <div className="cv-laptop-picture">{item.imageUrl ? <img src={item.imageUrl} alt={item.brand + ' ' + item.model} loading="lazy" referrerPolicy="no-referrer" /> : <span aria-hidden="true">💻</span>}
+                  <div className="cv-laptop-picture">{item.imageUrl ? <img src={item.imageUrl} alt={item.brand + ' ' + item.model} loading="lazy" referrerPolicy="no-referrer" /> : <span aria-hidden="true">{item.deviceType === "PHONE" ? "📱" : "💻"}</span>}
                     <span className="cv-laptop-chip">{conditions[item.condition]}</span></div>
                   <div className="cv-laptop-card-body">
-                    <div className="cv-laptop-eyebrow">{item.allowSwap ? 'SELL OR SWAP' : 'FOR SALE'} · {item.location}</div>
+                    <div className="cv-laptop-eyebrow">{item.deviceType === 'PHONE' ? 'PHONE' : 'LAPTOP'} · {item.allowSwap ? 'SELL OR SWAP' : 'FOR SALE'} · {item.location}</div>
                     <h4>{item.brand} {item.model}</h4>
                     <strong className="cv-laptop-price">{money(item.price)}</strong>
                     <p>{item.processor} · {item.ramGb}GB RAM · {item.storageGb}GB {item.storageType}</p>
@@ -258,20 +260,21 @@ export default function LaptopExchange({ user }) {
 
       {view === 'sell' && (
         <section className="cv-laptop-pane">
-          <div className="cv-laptop-title"><div><h3>Sell or swap your laptop</h3><p>Create your draft and privately submit proof of ownership. Buyers cannot see or bid on it until administrator review.</p></div></div>
+          <div className="cv-laptop-title"><div><h3>Sell or swap your phone or laptop</h3><p>Create your draft and privately submit proof of ownership. Buyers cannot see or bid on it until administrator review.</p></div></div>
           <form className="cv-laptop-list-form" onSubmit={createListing}>
             <div className="cv-laptop-fields">
+              <label><span>Device type</span><select value={form.deviceType} onChange={e=>setForm(s=>({...s,deviceType:e.target.value,storageType:e.target.value==="PHONE"?"INTERNAL":"SSD",ramGb:e.target.value==="PHONE"?"4":"8",serialNumber:""}))}><option value="LAPTOP">Laptop</option><option value="PHONE">Phone</option></select></label>
               {[
-                ['brand', 'Brand (e.g. Lenovo)'], ['model', 'Model'], ['processor', 'Processor and generation'],
+                ['brand', 'Brand (e.g. HP, Apple or Samsung)'], ['model', 'Model'], ['processor', 'Processor and generation'],
                 ['ramGb', 'RAM (GB)', 'number'], ['storageGb', 'Storage (GB)', 'number'],
               ].map(([key, label, type]) => <label key={key}><span>{label}</span><input required type={type || 'text'} min={type ? 1 : undefined} value={form[key]} maxLength={type ? undefined : 100} onChange={e => updateForm(key, e.target.value)}/></label>)}
-              <label><span>Storage technology</span><select value={form.storageType} onChange={e => updateForm('storageType', e.target.value)}><option>SSD</option><option>HDD</option><option>EMMC</option></select></label>
+              <label><span>Storage technology</span><select value={form.storageType} onChange={e => updateForm('storageType', e.target.value)}><option>SSD</option><option>HDD</option><option>EMMC</option><option>INTERNAL</option></select></label>
               <label><span>Overall condition</span><select value={form.condition} onChange={e => updateForm('condition', e.target.value)}>{Object.entries(conditions).map(([key,val]) => <option key={key} value={key}>{val}</option>)}</select></label>
               <label><span>Battery health % (optional, seller-reported)</span><input type="number" min="0" max="100" value={form.batteryHealth} onChange={e => updateForm('batteryHealth', e.target.value)} placeholder="From a battery report"/></label>
               <label><span>Asking price (₦)</span><input type="number" min="1000" required value={form.price} onChange={e => updateForm('price', e.target.value)}/></label>
               <label><span>Campus / meeting area (not home address)</span><input required maxLength={120} value={form.location} onChange={e => updateForm('location', e.target.value)} placeholder="e.g. UNN, Nsukka"/></label>
               <label><span>BIOS / organisational lock status</span><select value={form.lockStatus} onChange={e => updateForm('lockStatus', e.target.value)}><option value="NOT_CHECKED">Not checked</option><option value="DECLARED_CLEAR">I have checked; I believe it is clear</option></select></label>
-              <label><span>Full laptop serial number (required; stored only as a private keyed fingerprint)</span><input required minLength={6} maxLength={50} value={form.serialNumber} onChange={e => updateForm('serialNumber', e.target.value)} placeholder="Read from chassis or firmware"/></label>
+              <label><span>{form.deviceType === "PHONE" ? "15-digit IMEI (private; never shown in full)" : "Laptop serial (private; never shown in full)"}</span><input required minLength={form.deviceType === "PHONE" ? 15 : 6} maxLength={form.deviceType === "PHONE" ? 15 : 50} value={form.serialNumber} onChange={e => updateForm('serialNumber', e.target.value)} placeholder="Read from chassis or firmware"/></label>
               <label className="cv-laptop-wide"><span>Known faults and repair history (write “None known” if appropriate)</span><textarea required maxLength={600} value={form.faults} onChange={e => updateForm('faults', e.target.value)}/></label>
               <label className="cv-laptop-wide"><span>Accessories and additional details</span><textarea maxLength={2000} value={form.description} onChange={e => updateForm('description', e.target.value)} placeholder="Charger, webcam, ports, repair receipts, cosmetic issues…"/></label>
               <label className="cv-laptop-wide"><span>HTTPS image URL (optional)</span><input type="url" value={form.imageUrl} onChange={e => updateForm('imageUrl', e.target.value)} placeholder="https://..."/></label>
@@ -319,7 +322,7 @@ export default function LaptopExchange({ user }) {
               <label><span>Availability</span><select disabled={busy} value={item.status} onChange={e => transact(() => api.setLaptopStatus(item.id, e.target.value), 'Listing status updated.')}><option value="ACTIVE">Active</option><option value="PAUSED">Paused</option><option value="CLOSED">Closed</option></select></label>
             </div>)}
           </div>
-          <h4 className="cv-laptop-subtitle">Incoming and outgoing offers</h4>
+          <h4 className="cv-laptop-subtitle">Owner-managed buy and swap offers</h4>
           {!offers.length && <p className="cv-laptop-muted">No offers yet. Offers appear here after buyers submit them.</p>}
           <div className="cv-laptop-activity">
             {offers.map(o => {
@@ -331,9 +334,11 @@ export default function LaptopExchange({ user }) {
                   {o.offered && <p>Swap device: {o.offered.brand} {o.offered.model}</p>}
                   {incoming && <p>Proposed by: {o.buyer.name}</p>}
                   {o.note && <p>Message: {o.note}</p>}
+                  {o.status === "PENDING" && <p>Awaiting owner approval. The seller cannot accept yet.</p>}
+                  {o.status === "ACCEPTED" && <p>Seller agreed. The owner must confirm inspection, payment and handover.</p>}
                 </div>
-                {o.status === 'PENDING' && <div className="cv-laptop-action-stack">
-                  {incoming ? <><button disabled={busy} onClick={() => transact(() => api.decideLaptopOffer(o.id, 'ACCEPTED'), 'Offer accepted for discussion and inspection only.')}>Accept to discuss</button><button disabled={busy} onClick={() => transact(() => api.decideLaptopOffer(o.id, 'DECLINED'), 'Offer declined.')}>Decline</button></> :
+                {["PENDING","ADMIN_APPROVED"].includes(o.status) && <div className="cv-laptop-action-stack">
+                  {incoming && o.status === "ADMIN_APPROVED" ? <><button disabled={busy} onClick={() => transact(() => api.decideLaptopOffer(o.id, 'ACCEPTED'), 'Offer accepted for discussion and inspection only.')}>Accept to discuss</button><button disabled={busy} onClick={() => transact(() => api.decideLaptopOffer(o.id, 'DECLINED'), 'Offer declined.')}>Decline</button></> :
                     <button disabled={busy} onClick={() => transact(() => api.decideLaptopOffer(o.id, 'WITHDRAWN'), 'Offer withdrawn.')}>Withdraw</button>}
                 </div>}
               </article>;
@@ -345,7 +350,7 @@ export default function LaptopExchange({ user }) {
 
       {view === 'safety' && (
         <section className="cv-laptop-pane">
-          <div className="cv-laptop-title"><div><h3>Laptop safety centre</h3><p>Use these checks before any cash purchase or exchange in Nigeria.</p></div></div>
+          <div className="cv-laptop-title"><div><h3>Phone and laptop safety centre</h3><p>Use these checks before any cash purchase or exchange in Nigeria.</p></div></div>
           <div className="cv-laptop-safety-grid">
             {[
               ['01', 'Confirm ownership', 'Only reviewed-document listings can be offered for trade. Still demand original receipt or legal bill of sale, confirm seller authority, compare actual chassis and firmware serial numbers and obtain a signed handover receipt. Forged receipts are possible; this is not police database clearance.'],
