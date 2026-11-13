@@ -59,6 +59,15 @@ test("seller authorises sale by document + fresh selfie; owner manually approves
     headers:{"content-type":"application/octet-stream","x-ownership-document-type":"PURCHASE_RECEIPT"}});
   assert.equal(result.status,201,result.data.error);
 
+  // Even the owner may not approve a receipt-only submission.
+  result=await send("/api/admin/v2/laptop-ownership/"+record.id+"/match-identifier",{method:"POST",token:adminToken,
+    body:{identifier:serial}});
+  assert.equal(result.status,200);
+  result=await send("/api/admin/v2/laptop-ownership/"+record.id+"/review",{method:"POST",token:adminToken,
+    body:{decision:"REVIEWED",note:"Receipt only; missing seller selfie",serialMatched:true,
+      provenanceChecked:true,sellerIntentConfirmed:true}});
+  assert.equal(result.status,409,"Document-only submission must not become approved");
+
   result=await send(listingPath+"/seller-video-challenge",{method:"POST",token:strangerToken,body:{}});
   assert.equal(result.status,403,"Other users cannot issue challenge");
   result=await send(listingPath+"/seller-video-challenge",{method:"POST",token:sellerToken,body:{}});
@@ -66,6 +75,16 @@ test("seller authorises sale by document + fresh selfie; owner manually approves
   const code=result.data.challenge;
   assert.match(code,/^[A-F0-9]{8}$/);
   assert.match(result.data.prompt,/I personally authorise/);
+  // An old challenge is rejected even if the seller still has the code.
+  await prisma.laptopSellerVideoChallenge.update({where:{listingId:record.id},
+    data:{expiresAt:new Date(Date.now()-2000)}});
+  result=await send(listingPath+"/seller-video",{method:"POST",token:sellerToken,body:video,
+    headers:{"content-type":"application/octet-stream","x-seller-video-challenge":code,
+      "x-seller-video-mime":"video/webm","x-seller-video-consent":"yes"}});
+  assert.equal(result.status,409,"Expired video code cannot be used");
+  await prisma.laptopSellerVideoChallenge.update({where:{listingId:record.id},
+    data:{expiresAt:new Date(Date.now()+10*60*1000)}});
+
 
   result=await send(listingPath+"/seller-video",{method:"POST",token:sellerToken,body:video,
     headers:{"content-type":"application/octet-stream","x-seller-video-challenge":code,
