@@ -27,6 +27,7 @@ export const api = {
   removeLaptopOwnershipProof: (id) => request("/laptops/" + encodeURIComponent(id) + "/ownership-proof", { method: "DELETE" }),
   reportLaptopSafety: (id, payload) => request("/laptops/" + encodeURIComponent(id) + "/safety-report", { method: "POST", body: JSON.stringify(payload) }),
   adminGetOwnershipQueue: () => request("/admin/v2/laptop-ownership"),
+  adminMatchDeviceIdentifier: (id,identifier) => request("/admin/v2/laptop-ownership/" + encodeURIComponent(id) + "/match-identifier", { method: "POST", body: JSON.stringify({identifier}) }),
   adminGetLaptopReports: () => request("/admin/v2/laptop-reports"),
   adminGetDeviceOffers: () => request("/admin/v2/device-offers"),
   adminDecideDeviceOffer: (id, payload) => request("/admin/v2/device-offers/" + encodeURIComponent(id) + "/decision", { method: "POST", body: JSON.stringify(payload) }),

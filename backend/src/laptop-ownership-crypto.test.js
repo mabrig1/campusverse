@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
-import { evidenceKey, normalizedSerial, serialFingerprint, recognizedImage, encryptEvidence, decryptEvidence } from "./laptop-ownership-crypto.js";
+import { evidenceKey, normalizedSerial, normalizedDeviceIdentifier, serialFingerprint, recognizedImage, encryptEvidence, decryptEvidence } from "./laptop-ownership-crypto.js";
 
 test("serial values normalize and get a private, deterministic fingerprint", () => {
   const key = randomBytes(32);
@@ -31,4 +31,11 @@ test("only small JPEG or PNG proof photographs are allowed", () => {
   assert.equal(recognizedImage(Buffer.from("%PDF-1.7 test")), null);
   assert.equal(recognizedImage(Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]), Buffer.alloc(16)])), "image/png");
   assert.equal(recognizedImage(Buffer.concat([Buffer.from([255,216,255]),Buffer.alloc(20),Buffer.from([255,217])])), "image/jpeg");
+});
+
+test("valid IMEIs are structural checks only, not stolen-phone clearance", () => {
+  assert.equal(normalizedDeviceIdentifier("PHONE", "490154203237518"), "490154203237518");
+  assert.throws(() => normalizedDeviceIdentifier("PHONE","490154203237519"), /check digit/);
+  const key = randomBytes(32);
+  assert.notEqual(serialFingerprint("490154203237518",key,"PHONE"),serialFingerprint("490154203237518",key,"LAPTOP"));
 });

@@ -14,6 +14,8 @@ export default function DeviceTradingAdmin() {
   const [choice, setChoice] = useState("");
   const [note, setNote] = useState("");
   const [serialMatched, setSerialMatched] = useState(false);
+  const [physicalIdentifier, setPhysicalIdentifier] = useState("");
+  const [identifierResult, setIdentifierResult] = useState("");
   const [provenanceChecked, setProvenanceChecked] = useState(false);
   const [inspection, setInspection] = useState(false);
   const [payment, setPayment] = useState(false);
@@ -35,8 +37,18 @@ export default function DeviceTradingAdmin() {
   };
   const start = (kind,id,status) => {
     setSelection({ kind,id }); setChoice(status); setNote("");
-    setSerialMatched(false); setProvenanceChecked(false);
+    setSerialMatched(false); setProvenanceChecked(false); setPhysicalIdentifier(""); setIdentifierResult("");
     setInspection(false); setPayment(false); setHandover(false);
+  };
+  const matchPhysicalDevice = async row => {
+    setBusy(true); setError(""); setIdentifierResult("");
+    try {
+      const data = await api.adminMatchDeviceIdentifier(row.id,physicalIdentifier.trim());
+      setIdentifierResult(data.message);
+      setSerialMatched(Boolean(data.match));
+      if (data.match) await load();
+    } catch(e) { setError(e.message); setSerialMatched(false); }
+    finally { setBusy(false); }
   };
   const download = async row => {
     setBusy(true); setError("");
@@ -77,6 +89,7 @@ export default function DeviceTradingAdmin() {
       <p style={{fontSize:13,color:"#475569",margin:"8px 0"}}>{label(row.ownershipStatus)} · {row.seller?.name} ({row.seller?.email}) · Identifier ending {row.serialLast4 || "—"}</p>
       <p style={{fontSize:12,color:"#64748b"}}>{row.ownershipEvidence ? "Private " + label(row.ownershipEvidence.documentType) + " available" : "No ownership document"}</p>
       {row.ownershipEvidence && <button disabled={busy} style={{...btn,marginRight:8}} onClick={()=>download(row)}>Download private proof</button>}
+      <div style={{fontSize:12,color:row.identifierMatchedAt?"#047857":"#b45309",margin:"8px 0"}}>Physical identifier check: {row.identifierMatchedAt ? "MATCHED by owner" : "Not yet matched"}</div>
       <button style={{...btn,background:"#334155"}} onClick={()=>start("listing",row.id,"REVIEWED")}>Record review</button>
     </article>)}
     {!listings.length && <div style={card}>No ownership documents awaiting a decision.</div>}
@@ -108,6 +121,11 @@ export default function DeviceTradingAdmin() {
         <textarea style={{...field,minHeight:90}} minLength={12} maxLength={600} required value={note} onChange={e=>setNote(e.target.value)} />
       </label>
       {selection.kind === "listing" && choice === "REVIEWED" && <div style={{display:"grid",gap:10,marginBottom:14}}>
+        <label>Enter the serial or IMEI read directly from the physical device (never saved)
+          <input style={field} value={physicalIdentifier} type="text" autoComplete="off" onChange={e=>{setPhysicalIdentifier(e.target.value);setSerialMatched(false);setIdentifierResult("");}} placeholder="Compare the chassis / device Settings with the submitted listing" />
+        </label>
+        <button type="button" style={btn} disabled={busy || !physicalIdentifier} onClick={()=>matchPhysicalDevice({id:selection.id})}>Verify device identifier privately</button>
+        {identifierResult && <p style={{fontSize:12,color:serialMatched?"#047857":"#991b1b"}}>{identifierResult}</p>}
         <label><input type="checkbox" checked={serialMatched} onChange={e=>setSerialMatched(e.target.checked)}/> I compared serial/IMEI evidence with device identification.</label>
         <label><input type="checkbox" checked={provenanceChecked} onChange={e=>setProvenanceChecked(e.target.checked)}/> I checked lawful transfer history and supporting receipt.</label>
       </div>}
