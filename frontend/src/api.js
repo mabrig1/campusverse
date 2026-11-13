@@ -26,6 +26,20 @@ export const api = {
     method: "POST", body: file, headers: { "Content-Type": "application/octet-stream", "X-Ownership-Document-Type": type },
   }),
   removeLaptopOwnershipProof: (id) => request("/laptops/" + encodeURIComponent(id) + "/ownership-proof", { method: "DELETE" }),
+  issueSellerVideoChallenge: (id) => request("/laptops/" + encodeURIComponent(id) + "/seller-video-challenge", { method: "POST", body: "{}" }),
+  uploadSellerIntentVideo: (id, blob, challenge) => request("/laptops/" + encodeURIComponent(id) + "/seller-video", {
+    method: "POST", body: blob,
+    headers: { "Content-Type": "application/octet-stream", "X-Seller-Video-Challenge": challenge,
+      "X-Seller-Video-Consent": "yes", "X-Seller-Video-Mime": blob.type.split(";")[0] },
+  }),
+  removeSellerIntentVideo: (id) => request("/laptops/" + encodeURIComponent(id) + "/seller-video", { method: "DELETE" }),
+  adminDownloadSellerIntentVideo: async id => {
+    const res = await fetch(API_BASE + "/admin/v2/laptop-ownership/" + encodeURIComponent(id) + "/seller-video", {
+      headers: authToken ? { Authorization: "Bearer " + authToken } : {}, cache: "no-store",
+    });
+    if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Unable to retrieve the seller video"); }
+    return res.blob();
+  },
   reportLaptopSafety: (id, payload) => request("/laptops/" + encodeURIComponent(id) + "/safety-report", { method: "POST", body: JSON.stringify(payload) }),
   adminGetOwnershipQueue: () => request("/admin/v2/laptop-ownership"),
   adminMatchDeviceIdentifier: (id,identifier) => request("/admin/v2/laptop-ownership/" + encodeURIComponent(id) + "/match-identifier", { method: "POST", body: JSON.stringify({identifier}) }),

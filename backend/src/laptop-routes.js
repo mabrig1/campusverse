@@ -36,6 +36,7 @@ const sellerName = { seller: { select: { id: true, name: true } } };
 const ownerView = {
   seller: { select: { id: true, name: true } },
   ownershipEvidence: { select: { documentType: true, uploadedAt: true, byteLength: true } },
+  sellerVideoEvidence: { select: { uploadedAt: true, mimeType: true, byteLength: true } },
 };
 // Never publish or return serial fingerprints, private reviewer comments or proof documents.
 const withoutPrivateFields = ({ serialFingerprint, ownershipReviewNote, ...safe }) => safe;

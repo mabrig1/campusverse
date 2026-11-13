@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from './api';
 import { estimateTopUp } from './laptopValuation';
+import SellerIntentVideo from './SellerIntentVideo';
 import './LaptopExchange.css';
 
 const EMPTY = {
@@ -112,7 +113,7 @@ export default function LaptopExchange({ user }) {
       } catch (error) {
         throw new Error('Listing saved privately, but proof upload failed: ' + error.message + '. Open My listings to try again.');
       }
-    }, 'Private ownership document submitted for review. Your listing stays hidden until reviewed.')) {
+    }, 'Ownership document received. Open My listings to record your required live seller-authorisation video before approval.')) {
       setForm({ ...EMPTY }); setProofFile(null); setProofType('PURCHASE_RECEIPT');
       setView('mine');
     }
@@ -260,7 +261,7 @@ export default function LaptopExchange({ user }) {
 
       {view === 'sell' && (
         <section className="cv-laptop-pane">
-          <div className="cv-laptop-title"><div><h3>Sell or swap your phone or laptop</h3><p>Create your draft and privately submit proof of ownership. Buyers cannot see or bid on it until administrator review.</p></div></div>
+          <div className="cv-laptop-title"><div><h3>Sell or swap your phone or laptop</h3><p>First submit your proof of ownership; then record a live selfie video stating you authorised the sale. Neither is published to buyers. Your listing stays hidden until management inspects both.</p></div></div>
           <form className="cv-laptop-list-form" onSubmit={createListing}>
             <div className="cv-laptop-fields">
               <label><span>Device type</span><select value={form.deviceType} onChange={e=>setForm(s=>({...s,deviceType:e.target.value,storageType:e.target.value==="PHONE"?"INTERNAL":"SSD",ramGb:e.target.value==="PHONE"?"4":"8",serialNumber:""}))}><option value="LAPTOP">Laptop</option><option value="PHONE">Phone</option></select></label>
@@ -280,7 +281,7 @@ export default function LaptopExchange({ user }) {
               <label className="cv-laptop-wide"><span>HTTPS image URL (optional)</span><input type="url" value={form.imageUrl} onChange={e => updateForm('imageUrl', e.target.value)} placeholder="https://..."/></label>
             </div>
             <div className="cv-laptop-proof-box">
-              <h4>Private proof of ownership</h4>
+              <h4>Step 1 — Private proof of ownership</h4>
               <p>Attach a clear photo of an original purchase receipt, a signed bill of sale, or an official employer/school release. Show the laptop serial suffix and legitimate transfer history. Redact phone numbers, home address, payment details, NIN and BVN. No proof is shown publicly.</p>
               <div className="cv-laptop-fields">
                 <label><span>Document type</span><select value={proofType} onChange={e => setProofType(e.target.value)}><option value="PURCHASE_RECEIPT">Original purchase receipt</option><option value="BILL_OF_SALE">Signed bill of sale / previous owner transfer</option><option value="ORGANISATION_RELEASE">Official organisation release</option></select></label>
@@ -291,14 +292,14 @@ export default function LaptopExchange({ user }) {
               <label><input type="checkbox" checked={form.allowSwap} onChange={e => updateForm('allowSwap', e.target.checked)}/> Accept swap proposals as well as cash offers</label>
               <label><input type="checkbox" required checked={form.ownershipDeclared} onChange={e => updateForm('ownershipDeclared', e.target.checked)}/> I declare I own this laptop or am authorised to sell it and have disclosed known faults. This is not third-party verification.</label>
             </div>
-            <button type="submit" className="cv-laptop-primary" disabled={busy}>{busy ? 'Saving privately…' : 'Submit listing for ownership review'}</button>
+            <button type="submit" className="cv-laptop-primary" disabled={busy}>{busy ? 'Saving privately…' : 'Submit private listing and ownership document'}</button>
           </form>
         </section>
       )}
 
       {view === 'mine' && (
         <section className="cv-laptop-pane">
-          <div className="cv-laptop-title"><div><h3>My laptop activity</h3><p>Manage listings and respond to offers. Accepting is not a completed transaction.</p></div><button onClick={reload} className="cv-laptop-small">Refresh</button></div>
+          <div className="cv-laptop-title"><div><h3>My phone and laptop activity</h3><p>Manage listings and respond to offers. Accepting is not a completed transaction.</p></div><button onClick={reload} className="cv-laptop-small">Refresh</button></div>
           <h4 className="cv-laptop-subtitle">My listings</h4>
           {!mine.length && <p className="cv-laptop-muted">You have not listed a laptop.</p>}
           <div className="cv-laptop-activity">
@@ -309,6 +310,7 @@ export default function LaptopExchange({ user }) {
                 <p className="cv-laptop-review-line">Ownership review: <b>{item.ownershipStatus.replaceAll('_', ' ')}</b> {item.ownershipStatus === 'REVIEWED' ? '— documentation examined, not a theft guarantee' : '— hidden from buyers'}</p>
                 {item.ownershipReviewNote && <p>Administrator note: {item.ownershipReviewNote}</p>}
                 {item.ownershipEvidence && <p>Private document on file: {item.ownershipEvidence.documentType.replaceAll('_', ' ')}</p>}
+                {!item.sellerVideoEvidence && <p><b>📹 Seller video still required:</b> Record a new front-camera authorisation clip before the trading desk can approve this listing.</p>}
                 {!['FLAGGED','REVOKED'].includes(item.ownershipStatus) && item.status !== 'CLOSED' && <div className="cv-laptop-proof-upload">
                   <label><span>Document type</span><select value={proofTypes[item.id] || 'PURCHASE_RECEIPT'} onChange={e => setProofTypes(p => ({ ...p, [item.id]: e.target.value }))}><option value="PURCHASE_RECEIPT">Purchase receipt</option><option value="BILL_OF_SALE">Bill of sale</option><option value="ORGANISATION_RELEASE">Organisation release</option></select></label>
                   <label><span>{item.ownershipEvidence ? 'Replace private document' : 'Upload missing ownership proof'}</span><input type="file" accept="image/jpeg,image/png" onChange={e => setProofFiles(p => ({ ...p, [item.id]: e.target.files?.[0] || null }))}/></label>
@@ -317,6 +319,8 @@ export default function LaptopExchange({ user }) {
                     if (window.confirm('Erase your private evidence? The listing will be removed from public search.')) transact(() => api.removeLaptopOwnershipProof(item.id), 'Private document erased and listing hidden.');
                   }}>Erase evidence</button>}
                 </div>}
+                {item.ownershipEvidence && !['FLAGGED','REVOKED'].includes(item.ownershipStatus) && item.status !== 'CLOSED' &&
+                  <SellerIntentVideo listing={item} onComplete={reload}/>}
                 {['FLAGGED','REVOKED'].includes(item.ownershipStatus) && <p>Contact CampusVerse support for administrator review; editing proof cannot automatically clear a theft report.</p>}
               </div>
               <label><span>Availability</span><select disabled={busy} value={item.status} onChange={e => transact(() => api.setLaptopStatus(item.id, e.target.value), 'Listing status updated.')}><option value="ACTIVE">Active</option><option value="PAUSED">Paused</option><option value="CLOSED">Closed</option></select></label>

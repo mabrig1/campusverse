@@ -17,6 +17,9 @@ export default function DeviceTradingAdmin() {
   const [physicalIdentifier, setPhysicalIdentifier] = useState("");
   const [identifierResult, setIdentifierResult] = useState("");
   const [provenanceChecked, setProvenanceChecked] = useState(false);
+  const [sellerIntentConfirmed, setSellerIntentConfirmed] = useState(false);
+  const [sellerVideoUrl, setSellerVideoUrl] = useState("");
+  const [sellerVideoId, setSellerVideoId] = useState("");
   const [inspection, setInspection] = useState(false);
   const [payment, setPayment] = useState(false);
   const [handover, setHandover] = useState(false);
@@ -37,7 +40,7 @@ export default function DeviceTradingAdmin() {
   };
   const start = (kind,id,status) => {
     setSelection({ kind,id }); setChoice(status); setNote("");
-    setSerialMatched(false); setProvenanceChecked(false); setPhysicalIdentifier(""); setIdentifierResult("");
+    setSerialMatched(false); setProvenanceChecked(false); setSellerIntentConfirmed(false); setPhysicalIdentifier(""); setIdentifierResult("");
     setInspection(false); setPayment(false); setHandover(false);
   };
   const matchPhysicalDevice = async row => {
@@ -62,12 +65,24 @@ export default function DeviceTradingAdmin() {
     } catch(e) { setError(e.message); }
     finally { setBusy(false); }
   };
+  const openSellerVideo = async row => {
+    setBusy(true); setError("");
+    try {
+      const bytes = await api.adminDownloadSellerIntentVideo(row.id);
+      if (sellerVideoUrl) URL.revokeObjectURL(sellerVideoUrl);
+      const mime = row.sellerVideoEvidence?.mimeType || "video/webm";
+      const video = new Blob([bytes], { type: mime });
+      setSellerVideoUrl(URL.createObjectURL(video));
+      setSellerVideoId(row.id);
+    } catch (e) { setError(e.message); }
+    finally { setBusy(false); }
+  };
   const submit = async e => {
     e.preventDefault();
     if (!selection) return;
     const { kind, id } = selection;
     const data = kind === "listing"
-      ? { decision: choice, note, serialMatched, provenanceChecked }
+      ? { decision: choice, note, serialMatched, provenanceChecked, sellerIntentConfirmed }
       : { action: choice, note, inspectionConfirmed: inspection, paymentConfirmed: payment, handoverConfirmed: handover };
     const ok = await run(() => kind === "listing"
       ? api.adminReviewLaptopOwnership(id,data) : api.adminDecideDeviceOffer(id,data),
@@ -88,7 +103,17 @@ export default function DeviceTradingAdmin() {
       <strong>{row.deviceType === "PHONE" ? "📱" : "💻"} {row.brand} {row.model}</strong>
       <p style={{fontSize:13,color:"#475569",margin:"8px 0"}}>{label(row.ownershipStatus)} · {row.seller?.name} ({row.seller?.email}) · Identifier ending {row.serialLast4 || "—"}</p>
       <p style={{fontSize:12,color:"#64748b"}}>{row.ownershipEvidence ? "Private " + label(row.ownershipEvidence.documentType) + " available" : "No ownership document"}</p>
+      <p style={{fontSize:12,color:row.sellerVideoEvidence?"#047857":"#9f1239"}}>
+        {row.sellerVideoEvidence ? "Private seller-initiated selfie video received. Challenge: " + row.sellerVideoEvidence.challenge :
+        "Missing live seller-authorisation selfie video — cannot approve."}
+      </p>
       {row.ownershipEvidence && <button disabled={busy} style={{...btn,marginRight:8}} onClick={()=>download(row)}>Download private proof</button>}
+      {row.sellerVideoEvidence && <button disabled={busy} style={{...btn,marginRight:8}} onClick={()=>openSellerVideo(row)}>Privately review selfie video</button>}
+      {sellerVideoId === row.id && sellerVideoUrl && <div style={{margin:"12px 0"}}>
+        <video controls playsInline src={sellerVideoUrl} style={{maxWidth:360,width:"100%",borderRadius:9}} />
+        <p style={{fontSize:12,color:"#475569"}}>Check that the seller is visible, speaks the displayed one-time challenge and voluntarily authorises this device's sale or swap. Do not use automated face recognition.</p>
+        <button type="button" style={{...btn,background:"#64748b"}} onClick={()=>{URL.revokeObjectURL(sellerVideoUrl);setSellerVideoUrl("");setSellerVideoId("");}}>Close private video</button>
+      </div>}
       <div style={{fontSize:12,color:row.identifierMatchedAt?"#047857":"#b45309",margin:"8px 0"}}>Physical identifier check: {row.identifierMatchedAt ? "MATCHED by owner" : "Not yet matched"}</div>
       <button style={{...btn,background:"#334155"}} onClick={()=>start("listing",row.id,"REVIEWED")}>Record review</button>
     </article>)}
@@ -128,13 +153,16 @@ export default function DeviceTradingAdmin() {
         {identifierResult && <p style={{fontSize:12,color:serialMatched?"#047857":"#991b1b"}}>{identifierResult}</p>}
         <label><input type="checkbox" checked={serialMatched} onChange={e=>setSerialMatched(e.target.checked)}/> I compared serial/IMEI evidence with device identification.</label>
         <label><input type="checkbox" checked={provenanceChecked} onChange={e=>setProvenanceChecked(e.target.checked)}/> I checked lawful transfer history and supporting receipt.</label>
+        <label><input type="checkbox" checked={sellerIntentConfirmed} onChange={e=>setSellerIntentConfirmed(e.target.checked)}/>
+          I personally reviewed the fresh selfie video and heard the correct one-time challenge and voluntary sale/swap authorisation. This is not automated liveness or identity verification.
+        </label>
       </div>}
       {selection.kind === "offer" && choice === "COMPLETED" && <div style={{display:"grid",gap:10,marginBottom:14}}>
         <label><input type="checkbox" checked={inspection} onChange={e=>setInspection(e.target.checked)}/> Device inspection completed.</label>
         <label><input type="checkbox" checked={payment} onChange={e=>setPayment(e.target.checked)}/> Payment independently confirmed.</label>
         <label><input type="checkbox" checked={handover} onChange={e=>setHandover(e.target.checked)}/> Physical handover and receipt confirmed.</label>
       </div>}
-      <button type="submit" disabled={busy || (selection.kind==="listing"&&choice==="REVIEWED"&&(!serialMatched||!provenanceChecked)) || (selection.kind==="offer"&&choice==="COMPLETED"&&(!inspection||!payment||!handover))} style={btn}>Save owner decision</button>
+      <button type="submit" disabled={busy || (selection.kind==="listing"&&choice==="REVIEWED"&&(!serialMatched||!provenanceChecked||!sellerIntentConfirmed)) || (selection.kind==="offer"&&choice==="COMPLETED"&&(!inspection||!payment||!handover))} style={btn}>Save owner decision</button>
       <button type="button" style={{...btn,background:"#64748b",marginLeft:10}} onClick={()=>setSelection(null)}>Cancel</button>
     </form>}
   </section>;
