@@ -102,10 +102,10 @@ export default function CampusVerseStorefront({ onLogin }) {
         <section id="laptops" className="store-laptop-teaser">
           <div><span className="eyebrow">MAJOR FEATURE • MANAGED DEVICE MARKET</span>
             <h2>Upgrade a phone or laptop. <em>Trade with care.</em></h2>
-            <p>Buy, sell and swap used laptops in one student-focused marketplace. Compare processor and storage specs, disclose battery health and repair history, make cash or swap proposals, and follow a practical inspection checklist.</p>
+            <p>Buy, sell or swap used phones and laptops with clear specifications, ownership-document review, signed cash top-ups and a supervised handover process.</p>
             <div className="store-laptop-badges"><span>💻 Real listings</span><span>🔁 Swap offers</span><span>🛡️ Inspection guide</span><span>₦ Fair top-up calculator</span></div>
             <button type="button" className="store-primary large" onClick={() => onLogin('laptops')}>Start buying, selling or swapping →</button>
-            <small>Listing details are provided by sellers, not independently verified. Offers do not transfer funds or ownership.</small>
+            <small>Documents are reviewed, but theft-free status is not guaranteed. The trading desk must approve all offers and handovers.</small>
           </div>
           <div className="store-laptop-visual"><span aria-hidden="true">💻</span><b>Buy • Sell • Swap</b><p>A better way to compare devices and agree to inspect before trading.</p></div>
         </section>

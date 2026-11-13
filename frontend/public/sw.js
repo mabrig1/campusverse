@@ -2,7 +2,7 @@
 // Navigation documents are network-first so deployments and admin route
 // changes are not hidden behind an old app-shell cache. Static assets remain
 // cache-first for fast repeat visits; API calls are never intercepted.
-const CACHE_NAME = "campusverse-shell-v2";
+const CACHE_NAME = "campusverse-shell-v3-owner-managed";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
