@@ -60,3 +60,8 @@ ALTER TABLE "LaptopSafetyReport" ADD CONSTRAINT "LaptopSafetyReport_listingId_fk
   FOREIGN KEY ("listingId") REFERENCES "LaptopListing"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "LaptopSafetyReport" ADD CONSTRAINT "LaptopSafetyReport_reporterId_fkey"
   FOREIGN KEY ("reporterId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- Enforce one open listing per normalized private serial fingerprint, including under concurrent requests.
+CREATE UNIQUE INDEX "LaptopListing_active_serial_fingerprint_unique"
+ON "LaptopListing"("serialFingerprint")
+WHERE "serialFingerprint" IS NOT NULL AND "status" <> 'CLOSED';

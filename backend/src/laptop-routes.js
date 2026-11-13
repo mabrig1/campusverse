@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { prisma } from "./db.js";
 import { requireAuth } from "./auth.js";
+import { evidenceKey, normalizedSerial, serialFingerprint } from "./laptop-ownership-crypto.js";
 
 const amount = z.number().finite().min(-100_000_000).max(100_000_000);
 const listingSchema = z.object({
@@ -15,7 +16,7 @@ const listingSchema = z.object({
   faults: z.string().trim().min(3).max(600),
   description: z.string().trim().max(2000).default(""),
   imageUrl: z.union([z.url().startsWith("https://").max(2000), z.literal("")]).optional(),
-  serialLast4: z.union([z.string().trim().regex(/^[a-zA-Z0-9]{4}$/), z.literal("")]).optional(),
+  serialNumber: z.string().trim().min(6).max(50),
   lockStatus: z.enum(["NOT_CHECKED", "DECLARED_CLEAR"]),
   ownershipDeclared: z.literal(true),
   price: z.number().finite().min(1000).max(100_000_000),
@@ -31,6 +32,13 @@ const offerSchema = z.object({
 const statusSchema = z.object({ status: z.enum(["ACTIVE", "PAUSED", "CLOSED"]) }).strict();
 const decisionSchema = z.object({ status: z.enum(["ACCEPTED", "DECLINED", "WITHDRAWN"]) }).strict();
 const sellerName = { seller: { select: { id: true, name: true } } };
+const ownerView = {
+  seller: { select: { id: true, name: true } },
+  ownershipEvidence: { select: { documentType: true, uploadedAt: true, byteLength: true } },
+};
+// Never publish or return serial fingerprints, private reviewer comments or proof documents.
+const withoutPrivateFields = ({ serialFingerprint, ownershipReviewNote, ...safe }) => safe;
+const isReviewed = (item) => item.status === "ACTIVE" && item.ownershipStatus === "REVIEWED";
 const offerIncludes = {
   buyer: { select: { id: true, name: true } },
   target: { select: { id: true, brand: true, model: true, price: true, sellerId: true } },
@@ -48,6 +56,7 @@ export function registerLaptopRoutes(app) {
       return res.status(400).json({ error: "Invalid condition" });
     const where = {
       status: "ACTIVE",
+      ownershipStatus: "REVIEWED",
       ...(condition ? { condition } : {}),
       ...(req.query.swap === "true" ? { allowSwap: true } : {}),
       ...(q ? { OR: [
@@ -60,14 +69,14 @@ export function registerLaptopRoutes(app) {
     const items = await prisma.laptopListing.findMany({
       where, include: sellerName, orderBy: { createdAt: "desc" }, take: 40,
     });
-    res.json({ items });
+    res.json({ items: items.map(withoutPrivateFields) });
   }));
 
   app.get("/api/laptops/mine", requireAuth, asyncRoute(async (req, res) => {
     const items = await prisma.laptopListing.findMany({
-      where: { sellerId: req.userId }, orderBy: { createdAt: "desc" }, take: 100,
+      where: { sellerId: req.userId }, include: ownerView, orderBy: { createdAt: "desc" }, take: 100,
     });
-    res.json({ items });
+    res.json({ items: items.map(withoutPrivateFields) });
   }));
 
   app.get("/api/laptops/offers", requireAuth, asyncRoute(async (req, res) => {
@@ -81,11 +90,29 @@ export function registerLaptopRoutes(app) {
   app.post("/api/laptops", requireAuth, asyncRoute(async (req, res) => {
     const parsed = listingSchema.safeParse(req.body);
     if (!parsed.success) return fail(res, parsed);
-    const { imageUrl, serialLast4, ...data } = parsed.data;
-    const item = await prisma.laptopListing.create({
-      data: { ...data, imageUrl: imageUrl || null, serialLast4: serialLast4 || null, sellerId: req.userId },
+    let serial, fingerprint;
+    try {
+      serial = normalizedSerial(parsed.data.serialNumber);
+      fingerprint = serialFingerprint(serial, evidenceKey());
+    } catch (error) {
+      return res.status(error.message.includes("not configured") ? 503 : 400).json({ error: error.message });
+    }
+    const { imageUrl, serialNumber, ...data } = parsed.data;
+    const conflicting = await prisma.laptopListing.findFirst({
+      where: { serialFingerprint: fingerprint, status: { not: "CLOSED" } },
+      select: { id: true },
     });
-    res.status(201).json(item);
+    if (conflicting) return res.status(409).json({ error: "This device is already listed. Contact support if you are the lawful new owner." });
+    try {
+      const item = await prisma.laptopListing.create({
+        data: { ...data, imageUrl: imageUrl || null, serialLast4: serial.slice(-4),
+          serialFingerprint: fingerprint, ownershipStatus: "NOT_SUBMITTED", sellerId: req.userId },
+      });
+      res.status(201).json(withoutPrivateFields(item));
+    } catch (error) {
+      if (error.code === "P2002") return res.status(409).json({ error: "This device is already listed" });
+      throw error;
+    }
   }));
 
   app.patch("/api/laptops/:id/status", requireAuth, asyncRoute(async (req, res) => {
@@ -109,7 +136,7 @@ export function registerLaptopRoutes(app) {
       }
       return updated;
     });
-    res.json(item);
+    res.json(withoutPrivateFields(item));
   }));
 
   app.post("/api/laptops/:id/offers", requireAuth, asyncRoute(async (req, res) => {
@@ -117,7 +144,7 @@ export function registerLaptopRoutes(app) {
     if (!parsed.success) return fail(res, parsed);
     const { type, offeredId, amount: offerAmount, note } = parsed.data;
     const target = await prisma.laptopListing.findUnique({ where: { id: req.params.id } });
-    if (!target || target.status !== "ACTIVE") return res.status(404).json({ error: "Listing unavailable" });
+    if (!target || !isReviewed(target)) return res.status(404).json({ error: "Listing unavailable until ownership documents have been reviewed" });
     if (target.sellerId === req.userId) return res.status(403).json({ error: "You cannot bid on your own laptop" });
     if (type === "BUY" && (offeredId || offerAmount < 1000))
       return res.status(400).json({ error: "Provide a cash offer of at least ₦1,000 without a swap device" });
@@ -125,7 +152,7 @@ export function registerLaptopRoutes(app) {
       if (!target.allowSwap) return res.status(400).json({ error: "Seller is not accepting swaps" });
       if (!offeredId) return res.status(400).json({ error: "Choose your own active laptop listing" });
       const offered = await prisma.laptopListing.findUnique({ where: { id: offeredId } });
-      if (!offered || offered.sellerId !== req.userId || offered.status !== "ACTIVE")
+      if (!offered || offered.sellerId !== req.userId || !isReviewed(offered))
         return res.status(400).json({ error: "Swap device must be your own active listing" });
     }
     const item = await prisma.laptopOffer.create({
@@ -139,8 +166,8 @@ export function registerLaptopRoutes(app) {
     if (!parsed.success) return fail(res, parsed);
     const offer = await prisma.laptopOffer.findUnique({
       where: { id: req.params.id }, include: {
-        target: { select: { sellerId: true, status: true } },
-        offered: { select: { sellerId: true, status: true } },
+        target: { select: { sellerId: true, status: true, ownershipStatus: true } },
+        offered: { select: { sellerId: true, status: true, ownershipStatus: true } },
       },
     });
     if (!offer) return res.status(404).json({ error: "Offer not found" });
@@ -150,8 +177,8 @@ export function registerLaptopRoutes(app) {
       return res.status(403).json({ error: "Not authorised for this offer action" });
     if (offer.status !== "PENDING") return res.status(409).json({ error: "Offer is no longer pending" });
     if (parsed.data.status === "ACCEPTED" &&
-        (offer.target.status !== "ACTIVE" ||
-          (offer.type === "SWAP" && (!offer.offered || offer.offered.status !== "ACTIVE" || offer.offered.sellerId !== offer.buyerId)))) {
+        (!isReviewed(offer.target) ||
+          (offer.type === "SWAP" && (!offer.offered || !isReviewed(offer.offered) || offer.offered.sellerId !== offer.buyerId)))) {
       return res.status(409).json({ error: "One of the laptops is no longer available for this offer" });
     }
     const result = await prisma.laptopOffer.updateMany({
