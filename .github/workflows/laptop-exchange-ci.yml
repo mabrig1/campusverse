@@ -7,6 +7,7 @@ on:
     paths:
       - 'backend/prisma/**'
       - 'backend/src/laptop-routes.js'
+      - 'backend/src/laptop-ownership-*.js'
       - 'backend/server.js'
       - 'frontend/**'
       - '.github/workflows/laptop-exchange-ci.yml'
@@ -16,6 +17,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://campusverse:campusverse@localhost:5432/campusverse?schema=public
       JWT_SECRET: laptop-ci-only-not-a-production-secret
+      LAPTOP_PROOF_ENCRYPTION_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -30,6 +32,10 @@ jobs:
         run: |
           node --check backend/server.js
           node --check backend/src/laptop-routes.js
+          node --check backend/src/laptop-ownership-routes.js
+          node --check backend/src/laptop-ownership-crypto.js
+      - name: Ownership encryption and serial fingerprint tests
+        run: npm run test --workspace=backend
       - name: Swap calculator unit tests
         run: npm run test --workspace=frontend
       - name: Frontend production build

@@ -21,6 +21,21 @@ async function request(path, options = {}) {
 }
 
 export const api = {
+  uploadLaptopOwnershipProof: (id, file, type) => request("/laptops/" + encodeURIComponent(id) + "/ownership-proof", {
+    method: "POST", body: file, headers: { "Content-Type": "application/octet-stream", "X-Ownership-Document-Type": type },
+  }),
+  removeLaptopOwnershipProof: (id) => request("/laptops/" + encodeURIComponent(id) + "/ownership-proof", { method: "DELETE" }),
+  reportLaptopSafety: (id, payload) => request("/laptops/" + encodeURIComponent(id) + "/safety-report", { method: "POST", body: JSON.stringify(payload) }),
+  adminGetOwnershipQueue: () => request("/admin/v2/laptop-ownership"),
+  adminGetLaptopReports: () => request("/admin/v2/laptop-reports"),
+  adminReviewLaptopOwnership: (id, payload) => request("/admin/v2/laptop-ownership/" + encodeURIComponent(id) + "/review", { method: "POST", body: JSON.stringify(payload) }),
+  adminResolveLaptopReport: (id) => request("/admin/v2/laptop-reports/" + encodeURIComponent(id) + "/resolve", { method: "POST", body: "{}" }),
+  adminDownloadLaptopEvidence: async (id) => {
+    const res = await fetch(API_BASE + "/admin/v2/laptop-ownership/" + encodeURIComponent(id) + "/document",
+      { headers: authToken ? { Authorization: "Bearer " + authToken } : {}, cache: "no-store" });
+    if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Unable to download private document"); }
+    return res.blob();
+  },
   getLaptopListings: (params = {}) => {
     const qs = new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== ""))).toString();
     return request("/laptops" + (qs ? "?" + qs : ""));

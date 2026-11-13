@@ -6,7 +6,7 @@ import './LaptopExchange.css';
 const EMPTY = {
   brand: '', model: '', processor: '', ramGb: '8', storageGb: '256',
   storageType: 'SSD', condition: 'GOOD', batteryHealth: '',
-  faults: 'None known', description: '', imageUrl: '', serialLast4: '',
+  faults: 'None known', description: '', imageUrl: '', serialNumber: '',
   lockStatus: 'NOT_CHECKED', ownershipDeclared: false,
   price: '', allowSwap: true, location: '',
 };
@@ -28,6 +28,13 @@ export default function LaptopExchange({ user }) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [form, setForm] = useState({ ...EMPTY });
+  const [proofFile, setProofFile] = useState(null);
+  const [proofType, setProofType] = useState('PURCHASE_RECEIPT');
+  const [proofFiles, setProofFiles] = useState({});
+  const [proofTypes, setProofTypes] = useState({});
+  const [reportItem, setReportItem] = useState(null);
+  const [reportKind, setReportKind] = useState('SUSPECTED_STOLEN');
+  const [reportDetail, setReportDetail] = useState('');
   const [selected, setSelected] = useState(null);
   const [offerType, setOfferType] = useState('BUY');
   const [offeredId, setOfferedId] = useState('');
@@ -38,7 +45,7 @@ export default function LaptopExchange({ user }) {
   const [repairDeduction, setRepairDeduction] = useState('0');
   const updateForm = (field, value) => setForm(previous => ({ ...previous, [field]: value }));
   const reload = () => setRefreshKey(x => x + 1);
-  const activeOwned = mine.filter(x => x.status === 'ACTIVE');
+  const activeOwned = mine.filter(x => x.status === 'ACTIVE' && x.ownershipStatus === 'REVIEWED');
 
   useEffect(() => {
     let cancelled = false;
@@ -93,9 +100,20 @@ export default function LaptopExchange({ user }) {
       price: Number(form.price),
       batteryHealth: form.batteryHealth === '' ? null : Number(form.batteryHealth),
     };
-    if (await transact(() => api.createLaptopListing(payload), 'Laptop published with seller-declared details.')) {
-      setForm({ ...EMPTY });
-      setView('browse');
+    if (!proofFile || !['image/jpeg', 'image/png'].includes(proofFile.type) || proofFile.size > 2 * 1024 * 1024) {
+      setError('Attach a JPEG/PNG photograph of the purchase receipt or lawful transfer document (under 2 MB).');
+      return;
+    }
+    if (await transact(async () => {
+      const created = await api.createLaptopListing(payload);
+      try {
+        await api.uploadLaptopOwnershipProof(created.id, proofFile, proofType);
+      } catch (error) {
+        throw new Error('Listing saved privately, but proof upload failed: ' + error.message + '. Open My listings to try again.');
+      }
+    }, 'Private ownership document submitted for review. Your listing stays hidden until reviewed.')) {
+      setForm({ ...EMPTY }); setProofFile(null); setProofType('PURCHASE_RECEIPT');
+      setView('mine');
     }
   }
   async function submitOffer(event) {
@@ -111,6 +129,24 @@ export default function LaptopExchange({ user }) {
       'Offer submitted. No funds or ownership have moved. Arrange inspection before any exchange.')) {
       setSelected(null);
       setView('mine');
+    }
+  }
+  async function sendSafetyReport(event) {
+    event.preventDefault();
+    if (!reportItem) return;
+    if (await transact(() => api.reportLaptopSafety(reportItem.id, { reason: reportKind, detail: reportDetail }),
+      'Safety report submitted to administrators. A suspected stolen device is hidden while investigated.')) {
+      setReportItem(null); setReportDetail('');
+    }
+  }
+  async function uploadProofForListing(id) {
+    const file = proofFiles[id];
+    if (!file || !['image/jpeg', 'image/png'].includes(file.type) || file.size > 2 * 1024 * 1024) {
+      setError('Select a PNG/JPEG photograph smaller than 2 MB.'); return;
+    }
+    if (await transact(() => api.uploadLaptopOwnershipProof(id, file, proofTypes[id] || 'PURCHASE_RECEIPT'),
+      'Document submitted privately; listing hidden pending administrator review.')) {
+      setProofFiles(previous => ({ ...previous, [id]: null }));
     }
   }
   const difference = estimateTopUp(targetValue, tradeInValue, repairDeduction);
@@ -129,8 +165,8 @@ export default function LaptopExchange({ user }) {
         </div>
         <div className="cv-laptop-hero-side">
           <div className="cv-laptop-emoji" aria-hidden="true">💻</div>
-          <strong>Every deal starts with inspection.</strong>
-          <p>Prices and specifications are seller-declared. No laptop has been independently verified by this feature.</p>
+          <strong>Ownership paperwork required.</strong>
+          <p>Only listings with administrator-reviewed paperwork can appear in search. A reviewed receipt is not proof that a laptop is free from theft or locks.</p>
         </div>
       </section>
 
@@ -151,7 +187,7 @@ export default function LaptopExchange({ user }) {
 
       {view === 'browse' && (
         <section className="cv-laptop-pane">
-          <div className="cv-laptop-title"><div><h3>Available laptops</h3><p>Actual seller listings. No sample stock or invented availability.</p></div><button className="cv-laptop-small" onClick={reload}>Refresh</button></div>
+          <div className="cv-laptop-title"><div><h3>Available laptops</h3><p>Only listings with reviewed documents are visible. Paperwork can be forged: inspect devices in person.</p></div><button className="cv-laptop-small" onClick={reload}>Refresh</button></div>
           <form className="cv-laptop-filter" onSubmit={e => { e.preventDefault(); setSearch(searchDraft.trim()); }}>
             <label className="cv-laptop-search"><span>Search brand, model or campus</span><input value={searchDraft} onChange={e => setSearchDraft(e.target.value)} placeholder="e.g. ThinkPad, HP, Nsukka" maxLength={100}/></label>
             <label><span>Condition</span><select value={condition} onChange={e => setCondition(e.target.value)}><option value="">All conditions</option>{Object.entries(conditions).map(([k,v]) => <option key={k} value={k}>{v}</option>)}</select></label>
@@ -171,13 +207,15 @@ export default function LaptopExchange({ user }) {
                     <p>{item.processor} · {item.ramGb}GB RAM · {item.storageGb}GB {item.storageType}</p>
                     <p>Battery: {item.batteryHealth === null ? 'Not reported' : item.batteryHealth + '% claimed'} · Faults: {item.faults}</p>
                     {item.description && <p>{item.description}</p>}
-                    <div className="cv-laptop-note">Seller: {item.seller?.name || 'CampusVerse member'} · Ownership and hardware not independently verified</div>
+                    <div className="cv-laptop-note"><b>📄 Ownership documents reviewed</b> · Not a stolen-device clearance or physical certification.</div>
+                    <div className="cv-laptop-note">Seller: {item.seller?.name || 'CampusVerse member'} · Serial suffix: {item.serialLast4 || 'Not provided'}</div>
                     <div className="cv-laptop-note">Organisation/BIOS lock: {item.lockStatus === 'DECLARED_CLEAR' ? 'Seller reports clear; inspect yourself' : 'Not checked'}</div>
                     {item.sellerId !== user.id ? (
-                      <button className="cv-laptop-primary cv-laptop-card-btn" onClick={() => {
-                        setSelected(item); setOfferType('BUY'); setOfferAmount(String(item.price));
+                      <div className="cv-laptop-action-stack cv-laptop-card-buttons"><button className="cv-laptop-primary cv-laptop-card-btn" onClick={() => {
+                        setSelected(item); setReportItem(null); setOfferType('BUY'); setOfferAmount(String(item.price));
                         setOfferedId(''); setOfferNote('');
                       }}>Make a buy / swap offer</button>
+                      <button className="cv-laptop-small" onClick={() => { setReportItem(item); setSelected(null); setReportDetail(''); }}>Report suspicious laptop</button></div>
                     ) : <span className="cv-laptop-owned">Your listing</span>}
                   </div>
                 </article>
@@ -185,6 +223,20 @@ export default function LaptopExchange({ user }) {
             </div>
           )}
           {!loading && !filtered.length && !error && <div className="cv-laptop-empty">No matching laptop listings yet. Be the first to list a real device — or broaden your search.</div>}
+          {reportItem && view === 'browse' && (
+            <form className="cv-laptop-offer" onSubmit={sendSafetyReport}>
+              <div className="cv-laptop-title"><div><h3>Confidential safety report: {reportItem.brand} {reportItem.model}</h3><p>Report credible concerns. False or retaliatory reports may result in account action.</p></div>
+                <button type="button" className="cv-laptop-small" onClick={() => setReportItem(null)}>Close</button></div>
+              <div className="cv-laptop-fields">
+                <label><span>Reason</span><select value={reportKind} onChange={e => setReportKind(e.target.value)}>
+                  <option value="SUSPECTED_STOLEN">Suspected stolen device</option><option value="FALSE_DETAILS">Misleading specifications or ownership claims</option>
+                  <option value="LOCKED_DEVICE">Company/BIOS/Apple locked</option><option value="OTHER">Other safety concern</option>
+                </select></label>
+                <label className="cv-laptop-wide"><span>Explain your concern (10–500 characters)</span><textarea required minLength={10} maxLength={500} value={reportDetail} onChange={e => setReportDetail(e.target.value)} placeholder="Describe the evidence or suspicious behaviour, without including sensitive personal information." /></label>
+              </div>
+              <button disabled={busy} className="cv-laptop-primary" type="submit">Send confidential report</button>
+            </form>
+          )}
           {selected && view === 'browse' && (
             <form className="cv-laptop-offer" onSubmit={submitOffer}>
               <div className="cv-laptop-title"><div><h3>Offer for {selected.brand} {selected.model}</h3><p>Offers are negotiation only. No payment is collected.</p></div><button type="button" className="cv-laptop-small" onClick={() => setSelected(null)}>Close</button></div>
@@ -206,7 +258,7 @@ export default function LaptopExchange({ user }) {
 
       {view === 'sell' && (
         <section className="cv-laptop-pane">
-          <div className="cv-laptop-title"><div><h3>Sell or swap your laptop</h3><p>Publish honest technical specifications and disclose all known issues. Buyers can make offers.</p></div></div>
+          <div className="cv-laptop-title"><div><h3>Sell or swap your laptop</h3><p>Create your draft and privately submit proof of ownership. Buyers cannot see or bid on it until administrator review.</p></div></div>
           <form className="cv-laptop-list-form" onSubmit={createListing}>
             <div className="cv-laptop-fields">
               {[
@@ -219,16 +271,24 @@ export default function LaptopExchange({ user }) {
               <label><span>Asking price (₦)</span><input type="number" min="1000" required value={form.price} onChange={e => updateForm('price', e.target.value)}/></label>
               <label><span>Campus / meeting area (not home address)</span><input required maxLength={120} value={form.location} onChange={e => updateForm('location', e.target.value)} placeholder="e.g. UNN, Nsukka"/></label>
               <label><span>BIOS / organisational lock status</span><select value={form.lockStatus} onChange={e => updateForm('lockStatus', e.target.value)}><option value="NOT_CHECKED">Not checked</option><option value="DECLARED_CLEAR">I have checked; I believe it is clear</option></select></label>
-              <label><span>Serial number last 4 only (optional)</span><input maxLength={4} value={form.serialLast4} onChange={e => updateForm('serialLast4', e.target.value)} placeholder="Do not upload full serial"/></label>
+              <label><span>Full laptop serial number (required; stored only as a private keyed fingerprint)</span><input required minLength={6} maxLength={50} value={form.serialNumber} onChange={e => updateForm('serialNumber', e.target.value)} placeholder="Read from chassis or firmware"/></label>
               <label className="cv-laptop-wide"><span>Known faults and repair history (write “None known” if appropriate)</span><textarea required maxLength={600} value={form.faults} onChange={e => updateForm('faults', e.target.value)}/></label>
               <label className="cv-laptop-wide"><span>Accessories and additional details</span><textarea maxLength={2000} value={form.description} onChange={e => updateForm('description', e.target.value)} placeholder="Charger, webcam, ports, repair receipts, cosmetic issues…"/></label>
               <label className="cv-laptop-wide"><span>HTTPS image URL (optional)</span><input type="url" value={form.imageUrl} onChange={e => updateForm('imageUrl', e.target.value)} placeholder="https://..."/></label>
+            </div>
+            <div className="cv-laptop-proof-box">
+              <h4>Private proof of ownership</h4>
+              <p>Attach a clear photo of an original purchase receipt, a signed bill of sale, or an official employer/school release. Show the laptop serial suffix and legitimate transfer history. Redact phone numbers, home address, payment details, NIN and BVN. No proof is shown publicly.</p>
+              <div className="cv-laptop-fields">
+                <label><span>Document type</span><select value={proofType} onChange={e => setProofType(e.target.value)}><option value="PURCHASE_RECEIPT">Original purchase receipt</option><option value="BILL_OF_SALE">Signed bill of sale / previous owner transfer</option><option value="ORGANISATION_RELEASE">Official organisation release</option></select></label>
+                <label><span>Receipt / transfer photo (JPEG or PNG, 2 MB maximum)</span><input type="file" required accept="image/jpeg,image/png" onChange={e => setProofFile(e.target.files?.[0] || null)} /></label>
+              </div>
             </div>
             <div className="cv-laptop-consent">
               <label><input type="checkbox" checked={form.allowSwap} onChange={e => updateForm('allowSwap', e.target.checked)}/> Accept swap proposals as well as cash offers</label>
               <label><input type="checkbox" required checked={form.ownershipDeclared} onChange={e => updateForm('ownershipDeclared', e.target.checked)}/> I declare I own this laptop or am authorised to sell it and have disclosed known faults. This is not third-party verification.</label>
             </div>
-            <button type="submit" className="cv-laptop-primary" disabled={busy}>{busy ? 'Publishing…' : 'Publish laptop listing'}</button>
+            <button type="submit" className="cv-laptop-primary" disabled={busy}>{busy ? 'Saving privately…' : 'Submit listing for ownership review'}</button>
           </form>
         </section>
       )}
@@ -239,7 +299,25 @@ export default function LaptopExchange({ user }) {
           <h4 className="cv-laptop-subtitle">My listings</h4>
           {!mine.length && <p className="cv-laptop-muted">You have not listed a laptop.</p>}
           <div className="cv-laptop-activity">
-            {mine.map(item => <div className="cv-laptop-activity-row" key={item.id}><div><b>{item.brand} {item.model}</b><p>{money(item.price)} · {item.status} · {item.allowSwap ? 'Swaps welcome' : 'Cash offers only'}</p></div><label><span>Availability</span><select disabled={busy} value={item.status} onChange={e => transact(() => api.setLaptopStatus(item.id, e.target.value), 'Listing status updated.')}><option value="ACTIVE">Active</option><option value="PAUSED">Paused</option><option value="CLOSED">Closed</option></select></label></div>)}
+            {mine.map(item => <div className="cv-laptop-activity-row" key={item.id}>
+              <div className="cv-laptop-listing-detail">
+                <b>{item.brand} {item.model}</b>
+                <p>{money(item.price)} · {item.status} · {item.allowSwap ? 'Swaps welcome' : 'Cash offers only'} · Serial ending {item.serialLast4 || 'unknown'}</p>
+                <p className="cv-laptop-review-line">Ownership review: <b>{item.ownershipStatus.replaceAll('_', ' ')}</b> {item.ownershipStatus === 'REVIEWED' ? '— documentation examined, not a theft guarantee' : '— hidden from buyers'}</p>
+                {item.ownershipReviewNote && <p>Administrator note: {item.ownershipReviewNote}</p>}
+                {item.ownershipEvidence && <p>Private document on file: {item.ownershipEvidence.documentType.replaceAll('_', ' ')}</p>}
+                {!['FLAGGED','REVOKED'].includes(item.ownershipStatus) && item.status !== 'CLOSED' && <div className="cv-laptop-proof-upload">
+                  <label><span>Document type</span><select value={proofTypes[item.id] || 'PURCHASE_RECEIPT'} onChange={e => setProofTypes(p => ({ ...p, [item.id]: e.target.value }))}><option value="PURCHASE_RECEIPT">Purchase receipt</option><option value="BILL_OF_SALE">Bill of sale</option><option value="ORGANISATION_RELEASE">Organisation release</option></select></label>
+                  <label><span>{item.ownershipEvidence ? 'Replace private document' : 'Upload missing ownership proof'}</span><input type="file" accept="image/jpeg,image/png" onChange={e => setProofFiles(p => ({ ...p, [item.id]: e.target.files?.[0] || null }))}/></label>
+                  <button disabled={busy || !proofFiles[item.id]} onClick={() => uploadProofForListing(item.id)} type="button" className="cv-laptop-small">Send for review</button>
+                  {item.ownershipEvidence && <button disabled={busy} className="cv-laptop-small" type="button" onClick={() => {
+                    if (window.confirm('Erase your private evidence? The listing will be removed from public search.')) transact(() => api.removeLaptopOwnershipProof(item.id), 'Private document erased and listing hidden.');
+                  }}>Erase evidence</button>}
+                </div>}
+                {['FLAGGED','REVOKED'].includes(item.ownershipStatus) && <p>Contact CampusVerse support for administrator review; editing proof cannot automatically clear a theft report.</p>}
+              </div>
+              <label><span>Availability</span><select disabled={busy} value={item.status} onChange={e => transact(() => api.setLaptopStatus(item.id, e.target.value), 'Listing status updated.')}><option value="ACTIVE">Active</option><option value="PAUSED">Paused</option><option value="CLOSED">Closed</option></select></label>
+            </div>)}
           </div>
           <h4 className="cv-laptop-subtitle">Incoming and outgoing offers</h4>
           {!offers.length && <p className="cv-laptop-muted">No offers yet. Offers appear here after buyers submit them.</p>}
@@ -270,7 +348,7 @@ export default function LaptopExchange({ user }) {
           <div className="cv-laptop-title"><div><h3>Laptop safety centre</h3><p>Use these checks before any cash purchase or exchange in Nigeria.</p></div></div>
           <div className="cv-laptop-safety-grid">
             {[
-              ['01', 'Confirm ownership', 'Ask for proof of lawful ownership, compare chassis and firmware serial numbers in person, and insist on a receipt. The platform does not check stolen-device databases.'],
+              ['01', 'Confirm ownership', 'Only reviewed-document listings can be offered for trade. Still demand original receipt or legal bill of sale, confirm seller authority, compare actual chassis and firmware serial numbers and obtain a signed handover receipt. Forged receipts are possible; this is not police database clearance.'],
               ['02', 'Verify actual specifications', 'Inspect CPU generation, RAM, SSD, Windows activation, screen, keyboard, webcam, Wi-Fi, ports and charger. Do not trust screenshots alone.'],
               ['03', 'Assess battery and locks', 'Generate a Windows battery report. Check BIOS passwords, Apple Activation Lock, and company/school management. Reinstalling Windows may not remove organisation enrolment.'],
               ['04', 'Inspect in a safe location', 'Arrange a staffed public meeting, bring a trusted companion, test for 20–30 minutes and do not travel to an unfamiliar isolated location.'],
