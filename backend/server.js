@@ -14,6 +14,7 @@ import { prisma } from "./src/db.js";
 import { registerLaptopRoutes } from "./src/laptop-routes.js";
 import { registerLaptopOwnershipRoutes } from "./src/laptop-ownership-routes.js";
 import { registerDeviceOfferAdminRoutes } from "./src/device-offer-admin-routes.js";
+import { ownerManagedGuard, ownerManagedLaunch } from "./src/owner-managed-launch.js";
 import { signToken, requireAuth, optionalAuth } from "./src/auth.js";
 import { verifyGoogleIdToken, GoogleAuthNotConfiguredError } from "./src/google-auth.js";
 import { chargeWallet, creditWallet, InsufficientFundsError } from "./src/wallet.js";
@@ -35,6 +36,7 @@ const PORT = process.env.PORT || 5000;
 app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 app.use(cors());
 app.use(express.json());
+app.use(ownerManagedGuard);
 
 function handleError(res, err) {
   if (err instanceof InsufficientFundsError) {
@@ -86,7 +88,7 @@ function serializeProduct(product, { favorited = false } = {}) {
     promotionExpiresAt: isPromoted ? product.promotionExpiresAt : null,
     listingAge: listingAge(product.createdAt),
     favorited,
-    whatsappLink: whatsappLink(
+    whatsappLink: ownerManagedLaunch ? null : whatsappLink(
       seller.phone,
       `Hi, I found your listing "${product.title}" on CampusVerse and I'm interested in this item.`
     ),
@@ -95,7 +97,7 @@ function serializeProduct(product, { favorited = false } = {}) {
       name: seller.name,
       verified: seller.studentIdVerified,
       trustScore: trust.trustScore,
-      phone: seller.phone,
+      phone: ownerManagedLaunch ? null : seller.phone,
       avatarUrl:
         seller.avatarUrl ||
         "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200",

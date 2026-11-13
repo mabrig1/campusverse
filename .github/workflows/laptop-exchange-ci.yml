@@ -11,6 +11,7 @@ on:
       - 'backend/server.js'
       - 'backend/src/device-offer-admin-routes.js'
       - 'backend/src/trading-owner.js'
+      - 'backend/src/owner-managed-launch.js'
       - 'frontend/**'
       - '.github/workflows/laptop-exchange-ci.yml'
 jobs:
@@ -54,6 +55,7 @@ jobs:
           node --check backend/src/laptop-ownership-crypto.js
           node --check backend/src/device-offer-admin-routes.js
           node --check backend/src/trading-owner.js
+          node --check backend/src/owner-managed-launch.js
       - name: Ownership encryption and serial fingerprint tests
         run: npm run test --workspace=backend
       - name: Swap calculator unit tests
