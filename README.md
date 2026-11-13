@@ -136,3 +136,19 @@ A listing begins `NOT_SUBMITTED`, becomes `PENDING` after upload, and is only pu
 ## Cloudflare Worker resource optimisation (staged, not production)
 
 A Cloudflare API gateway and optional static frontend Worker have been added. Caching is limited to anonymous static marketplace categories and public service metadata. **Phone/laptop listings, ownership proofs, admin actions, offers and all transactions are never cached.** Neither Worker is attached to the live domain. See [Cloudflare deployment, verification and rollback guide](docs/cloudflare-worker-rollout.md).
+
+
+## Mandatory seller-initiated selfie video — management-only first release
+A student selling or swapping a used laptop or iPhone must submit **both** lawful ownership paperwork and a **fresh self-recorded authorisation video**. This strengthens evidence of the seller's voluntary intention but is **not** biometric identification, a government ID check, police clearance, or proof that the device is not stolen.
+
+1. Seller creates a private device listing and uploads a PNG/JPEG receipt, signed bill of sale or organisation release (max 2 MB). Full serial/IMEI remains a keyed HMAC fingerprint.
+2. In **My listings → Seller video**, seller requests a one-time, **10-minute** challenge. Requesting a new challenge invalidates prior video approval and clears pending/approved offers. A new challenge has a 60-second cooldown.
+3. Seller explicitly consents to recording a **fresh approximately 8-second selfie video with camera and microphone**. They state that they personally authorised the sale/swap of the displayed device, its identifier suffix, and the new challenge. The browser automatically stops recording and previews it before upload.
+4. Server accepts only WebM/MP4 uploads up to **2 MB**, matching the active one-time challenge, linked to the authenticated listing seller. It encrypts the binary video with AES-256-GCM and listing-scoped authenticated data, stores it in private PostgreSQL, and consumes the challenge.
+5. Only the designated ADMIN configured by `TRADING_OWNER_EMAIL` may retrieve the private recording. Before approving, the owner must personally review the clip, confirm the challenge and voluntary declaration, check the ownership receipt and physically match serial/IMEI. No automated facial recognition, liveness detection or stolen-device blacklist lookup is performed.
+6. Replacing a document or deleting a video revokes approval and removes the listing from public searches. An administrator cannot mark a listing REVIEWED unless the private receipt and selfie video both exist and owner checkboxes are confirmed.
+7. Never expose selfie videos to buyers or as public URLs. The video may contain identifiable personal information; configure a privacy notice, access controls, retention period, deletion procedure and incident handling policy **before production rollout**. No automatic video-retention purge is implemented yet.
+
+**Operational limit:** The upload signature and single-use challenge alone cannot prove the file is playable, contains a real person, was freshly filmed, or establishes rightful ownership. This requires actual reviewer inspection and, for valuable devices, physical handover checks. The current 2 MB limit is intended for a short, low-resolution clip because serverless request payloads are size-constrained. If longer recordings are needed, use secure, privately encrypted direct uploads to reviewed object storage rather than exposing videos in public R2 buckets.
+
+**Safe first release:** This branch adds a PostgreSQL migration which intentionally resets old document-only REVIEWED listings to PENDING and invalidates open offers; back up and review data before ever applying it in production. Keep PR #10 open until buyer/seller/owner staging tests and privacy controls pass. The existing live site is unchanged by this commit.

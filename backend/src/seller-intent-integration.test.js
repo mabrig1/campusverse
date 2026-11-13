@@ -83,7 +83,7 @@ test("seller authorises sale by document + fresh selfie; owner manually approves
 
   const saved=await prisma.laptopSellerVideoEvidence.findUnique({where:{listingId:record.id}});
   assert(saved?.cipherText && saved.cipherText.length>0,"Encrypted evidence was persisted");
-  assert(!saved.cipherText.equals(video),"Stored evidence must not be plaintext");
+  assert(!Buffer.from(saved.cipherText).equals(video),"Stored evidence must not be plaintext");
 
   result=await send(listingPath+"/seller-video",{method:"POST",token:sellerToken,body:video,
     headers:{"content-type":"application/octet-stream","x-seller-video-challenge":code,

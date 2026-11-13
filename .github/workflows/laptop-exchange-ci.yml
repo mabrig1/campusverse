@@ -10,6 +10,7 @@ on:
       - 'backend/src/laptop-routes.js'
       - 'backend/src/laptop-ownership-*.js'
       - 'backend/src/seller-intent-routes.js'
+      - 'backend/src/seller-intent-integration.test.js'
       - 'backend/server.js'
       - 'backend/src/device-offer-admin-routes.js'
       - 'backend/src/trading-owner.js'
@@ -66,6 +67,11 @@ jobs:
           node --check backend/src/owner-managed-launch.js
       - name: Ownership encryption and serial fingerprint tests
         run: npm run test --workspace=backend
+      - name: Seller authorisation video end-to-end security test (disposable PostgreSQL)
+        env:
+          VERCEL: '1'
+          TRADING_OWNER_EMAIL: owner-integration-test@example.test
+        run: node --test backend/src/seller-intent-integration.test.js
       - name: Cloudflare Worker safety and config tests
         run: |
           node --check workers/edge-api/src/index.js
