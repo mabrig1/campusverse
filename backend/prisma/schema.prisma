@@ -11,6 +11,11 @@ enum Role {
   STUDENT
   ADMIN
 }
+enum StoreRegistrationIntent {
+  BUY_FROM_STORE
+  SELL_TO_STORE
+  BOTH
+}
 
 model User {
   id        String   @id @default(cuid())
@@ -22,6 +27,7 @@ model User {
   regNo     String?
   hostel    String?
   phone     String?
+  storeIntent StoreRegistrationIntent @default(BUY_FROM_STORE)
   avatarUrl String?
   createdAt DateTime @default(now())
 

@@ -69,7 +69,7 @@ export function registerPersonalStoreRoutes(app) {
       where:{storeInventory:false,status:{not:"CLOSED"}},
       select:intakeView,orderBy:{createdAt:"desc"},take:150,
     });
-    res.json({items:records});
+    res.json({ownerId:_req.userId,items:records});
   }));
 
   app.get("/api/admin/v2/store-inventory",requireAdminAuth,requireTradingOwner,safe(async(req,res)=>{

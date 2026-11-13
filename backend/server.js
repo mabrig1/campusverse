@@ -17,6 +17,7 @@ import { registerSellerIntentRoutes } from "./src/seller-intent-routes.js";
 import { registerDeviceOfferAdminRoutes } from "./src/device-offer-admin-routes.js";
 import { registerPersonalStoreRoutes } from "./src/personal-store-routes.js";
 import { ownerManagedGuard, ownerManagedLaunch } from "./src/owner-managed-launch.js";
+import { PERSONAL_STORE_ONLY } from "./src/store-pilot.js";
 import { signToken, requireAuth, optionalAuth } from "./src/auth.js";
 import { verifyGoogleIdToken, GoogleAuthNotConfiguredError } from "./src/google-auth.js";
 import { chargeWallet, creditWallet, InsufficientFundsError } from "./src/wallet.js";
@@ -121,6 +122,7 @@ async function serializeUser(user) {
     hostel: user.hostel,
     phone: user.phone,
     role: user.role,
+    storeIntent: user.storeIntent,
     phoneVerified: user.phoneVerified,
     emailVerified: user.emailVerified,
     studentIdVerified: user.studentIdVerified,
@@ -149,6 +151,7 @@ const registerSchema = z.object({
   regNo: z.string().optional(),
   hostel: z.string().optional(),
   phone: z.string().optional(),
+  storeIntent: z.enum(["BUY_FROM_STORE","SELL_TO_STORE","BOTH"]).default("BUY_FROM_STORE"),
 });
 
 app.post("/api/auth/register", async (req, res) => {
@@ -156,7 +159,7 @@ app.post("/api/auth/register", async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid input" });
   }
-  const { name, email, password, regNo, hostel, phone } = parsed.data;
+  const { name, email, password, regNo, hostel, phone, storeIntent } = parsed.data;
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
@@ -172,6 +175,7 @@ app.post("/api/auth/register", async (req, res) => {
       regNo,
       hostel,
       phone,
+      storeIntent,
       phoneVerified: Boolean(phone),
       emailVerified: true,
       wallet: { create: { balance: 0 } },
@@ -444,6 +448,10 @@ async function expireStalePromotions() {
 }
 
 app.get("/api/products", optionalAuth, async (req, res) => {
+  // This previous multi-vendor product directory is intentionally dormant.
+  // Only registered CampusVerse shop inventory may appear in the pilot.
+  if (PERSONAL_STORE_ONLY) return res.json({items:[],page:1,hasMore:false,total:0,
+    message:"The personal store pilot sells verified used laptops and iPhones through /api/laptops."});
   await expireStalePromotions();
 
   const {
@@ -514,6 +522,7 @@ app.get("/api/products", optionalAuth, async (req, res) => {
 });
 
 app.get("/api/products/:id", optionalAuth, async (req, res) => {
+  if (PERSONAL_STORE_ONLY) return res.status(404).json({error:"Independent vendor product listings are disabled during the single-store pilot"});
   const product = await prisma.product.update({
     where: { id: req.params.id },
     data: { viewCount: { increment: 1 } },
