@@ -157,18 +157,18 @@ export default function LaptopExchange({ user }) {
     <div className="cv-laptop">
       <section className="cv-laptop-hero">
         <div>
-          <div className="cv-laptop-eyebrow">CAMPUSVERSE • LAPTOP EXCHANGE</div>
-          <h2>Buy. Sell. <span>Swap phones or laptops.</span></h2>
-          <p>Trade phones and laptops through the owner-managed CampusVerse desk. Proof of ownership is reviewed before listings appear and every offer needs approval before negotiation.</p>
+          <div className="cv-laptop-eyebrow">CAMPUSVERSE • ONE PHYSICAL SHOP • OWNER-MANAGED PILOT</div>
+          <h2>Buy from CampusVerse. <span>Sell your device to our store.</span></h2>
+          <p>This first release is one personal campus store. Students buy used laptops and iPhones from CampusVerse, or offer their own device to the store for inspection and a private purchase quote. No student-to-student marketplace or independent shops are open.</p>
           <div className="cv-laptop-actions">
-            <button className="cv-laptop-primary" onClick={() => setView('browse')}>Browse laptops</button>
-            <button className="cv-laptop-outline" onClick={() => setView('sell')}>List your laptop</button>
+            <button className="cv-laptop-primary" onClick={() => setView('browse')}>Buy from CampusVerse</button>
+            <button className="cv-laptop-outline" onClick={() => setView('sell')}>Sell to CampusVerse</button>
           </div>
         </div>
         <div className="cv-laptop-hero-side">
           <div className="cv-laptop-emoji" aria-hidden="true">💻</div>
           <strong>Ownership paperwork required.</strong>
-          <p>Only listings with administrator-reviewed paperwork can appear in search. A reviewed receipt is not proof that a laptop is free from theft or locks.</p>
+          <p>Only devices actually acquired and controlled by CampusVerse may appear in this shop. Private student submissions never become peer-to-peer listings. Document reviews alone do not prove a device is theft-free.</p>
         </div>
       </section>
 
@@ -189,7 +189,7 @@ export default function LaptopExchange({ user }) {
 
       {view === 'browse' && (
         <section className="cv-laptop-pane">
-          <div className="cv-laptop-title"><div><h3>Available phones & laptops</h3><p>Only listings with reviewed documents are visible. Paperwork can be forged: inspect devices in person.</p></div><button className="cv-laptop-small" onClick={reload}>Refresh</button></div>
+          <div className="cv-laptop-title"><div><h3>CampusVerse store stock — laptops and iPhones</h3><p>These are devices in the CampusVerse store. Every purchase or swap is inspected and completed by the store owner, not strangers.</p></div><button className="cv-laptop-small" onClick={reload}>Refresh</button></div>
           <form className="cv-laptop-filter" onSubmit={e => { e.preventDefault(); setSearch(searchDraft.trim()); }}>
             <label className="cv-laptop-search"><span>Search brand, model or campus</span><input value={searchDraft} onChange={e => setSearchDraft(e.target.value)} placeholder="e.g. ThinkPad, HP, Nsukka" maxLength={100}/></label>
             <label><span>Device</span><select value={deviceTypeFilter} onChange={e=>setDeviceTypeFilter(e.target.value)}><option value="">All devices</option><option value="PHONE">Phones</option><option value="LAPTOP">Laptops</option></select></label>
@@ -217,7 +217,7 @@ export default function LaptopExchange({ user }) {
                       <div className="cv-laptop-action-stack cv-laptop-card-buttons"><button className="cv-laptop-primary cv-laptop-card-btn" onClick={() => {
                         setSelected(item); setReportItem(null); setOfferType('BUY'); setOfferAmount(String(item.price));
                         setOfferedId(''); setOfferNote('');
-                      }}>Make a buy / swap offer</button>
+                      }}>Make an offer to CampusVerse</button>
                       <button className="cv-laptop-small" onClick={() => { setReportItem(item); setSelected(null); setReportDetail(''); }}>Report suspicious laptop</button></div>
                     ) : <span className="cv-laptop-owned">Your listing</span>}
                   </div>
@@ -261,7 +261,7 @@ export default function LaptopExchange({ user }) {
 
       {view === 'sell' && (
         <section className="cv-laptop-pane">
-          <div className="cv-laptop-title"><div><h3>Sell or swap your phone or laptop</h3><p>First submit your proof of ownership; then record a live selfie video stating you authorised the sale. Neither is published to buyers. Your listing stays hidden until management inspects both.</p></div></div>
+          <div className="cv-laptop-title"><div><h3>Offer your phone or laptop to the CampusVerse store</h3><p>You are not opening a shop. Submit a private sell-to-store request with proof of ownership and a fresh seller selfie video. CampusVerse management inspects the device and can send you a private purchase quote. Only after you agree and are paid will it become our store inventory.</p></div></div>
           <form className="cv-laptop-list-form" onSubmit={createListing}>
             <div className="cv-laptop-fields">
               <label><span>Device type</span><select value={form.deviceType} onChange={e=>setForm(s=>({...s,deviceType:e.target.value,storageType:e.target.value==="PHONE"?"INTERNAL":"SSD",ramGb:e.target.value==="PHONE"?"4":"8",serialNumber:""}))}><option value="LAPTOP">Laptop</option><option value="PHONE">Phone</option></select></label>
@@ -299,15 +299,32 @@ export default function LaptopExchange({ user }) {
 
       {view === 'mine' && (
         <section className="cv-laptop-pane">
-          <div className="cv-laptop-title"><div><h3>My phone and laptop activity</h3><p>Manage listings and respond to offers. Accepting is not a completed transaction.</p></div><button onClick={reload} className="cv-laptop-small">Refresh</button></div>
-          <h4 className="cv-laptop-subtitle">My listings</h4>
-          {!mine.length && <p className="cv-laptop-muted">You have not listed a laptop.</p>}
+          <div className="cv-laptop-title"><div><h3>My sell-to-CampusVerse requests and store purchases</h3><p>Manage listings and respond to offers. Accepting is not a completed transaction.</p></div><button onClick={reload} className="cv-laptop-small">Refresh</button></div>
+          <h4 className="cv-laptop-subtitle">My private device submissions</h4>
+          {!mine.length && <p className="cv-laptop-muted">You have not offered a device to the CampusVerse store.</p>}
           <div className="cv-laptop-activity">
             {mine.map(item => <div className="cv-laptop-activity-row" key={item.id}>
               <div className="cv-laptop-listing-detail">
                 <b>{item.brand} {item.model}</b>
                 <p>{money(item.price)} · {item.status} · {item.allowSwap ? 'Swaps welcome' : 'Cash offers only'} · Serial ending {item.serialLast4 || 'unknown'}</p>
-                <p className="cv-laptop-review-line">Ownership review: <b>{item.ownershipStatus.replaceAll('_', ' ')}</b> {item.ownershipStatus === 'REVIEWED' ? '— documentation examined, not a theft guarantee' : '— hidden from buyers'}</p>
+                <p className="cv-laptop-review-line">Document and seller identity review: <b>{item.ownershipStatus.replaceAll('_', ' ')}</b> — your submission is not publicly for sale.</p>
+                {item.storeQuote && <div className="cv-laptop-review-line">
+                  <b>CampusVerse purchase offer: {money(item.storeQuote.price)} — {item.storeQuote.status.replaceAll('_', ' ')}</b>
+                  {item.storeQuote.note && <p>Owner message: {item.storeQuote.note}</p>}
+                  {item.storeQuote.status === 'OFFERED' && <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:10}}>
+                    <button type="button" className="cv-laptop-primary" disabled={busy}
+                      onClick={()=>transact(()=>api.sellerRespondStoreQuote(item.id,'SELLER_ACCEPTED'),
+                        'You agreed to the purchase price. Visit the CampusVerse store for inspection, verified payment and signed handover.')}>
+                      Accept CampusVerse offer
+                    </button>
+                    <button type="button" className="cv-laptop-small" disabled={busy}
+                      onClick={()=>transact(()=>api.sellerRespondStoreQuote(item.id,'SELLER_DECLINED'),'You declined the offer. Your device remains yours.')}>
+                      Decline
+                    </button>
+                  </div>}
+                  {item.storeQuote.status === 'SELLER_ACCEPTED' && <p>Price agreed. Device and payment still require the owner’s in-person confirmation.</p>}
+                  {item.storeQuote.status === 'ACQUIRED' && <p>CampusVerse has recorded the purchase and handover. This device is no longer your active listing.</p>}
+                </div>}
                 {item.ownershipReviewNote && <p>Administrator note: {item.ownershipReviewNote}</p>}
                 {item.ownershipEvidence && <p>Private document on file: {item.ownershipEvidence.documentType.replaceAll('_', ' ')}</p>}
                 {!item.sellerVideoEvidence && <p><b>📹 Seller video still required:</b> Record a new front-camera authorisation clip before the trading desk can approve this listing.</p>}
@@ -326,7 +343,7 @@ export default function LaptopExchange({ user }) {
               <label><span>Availability</span><select disabled={busy} value={item.status} onChange={e => transact(() => api.setLaptopStatus(item.id, e.target.value), 'Listing status updated.')}><option value="ACTIVE">Active</option><option value="PAUSED">Paused</option><option value="CLOSED">Closed</option></select></label>
             </div>)}
           </div>
-          <h4 className="cv-laptop-subtitle">Owner-managed buy and swap offers</h4>
+          <h4 className="cv-laptop-subtitle">My buying and swap requests to CampusVerse</h4>
           {!offers.length && <p className="cv-laptop-muted">No offers yet. Offers appear here after buyers submit them.</p>}
           <div className="cv-laptop-activity">
             {offers.map(o => {

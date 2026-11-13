@@ -8,6 +8,7 @@ const money=n=>"₦"+Number(n||0).toLocaleString("en-NG");
 const human=x=>String(x||"").replaceAll("_"," ");
 export default function PersonalStoreDesk() {
   const [intakes,setIntakes]=useState([]);
+  const [ownerId,setOwnerId]=useState(null);
   const [stock,setStock]=useState([]);
   const [editing,setEditing]=useState(null);
   const [price,setPrice]=useState("");
@@ -22,7 +23,7 @@ export default function PersonalStoreDesk() {
 
   const load=useCallback(async()=>{
     const [intakeData,stockData]=await Promise.all([api.adminGetStoreIntakes(),api.adminGetStoreInventory()]);
-    setIntakes(intakeData.items||[]);setStock(stockData.items||[]);
+    setIntakes(intakeData.items||[]);setStock(stockData.items||[]);setOwnerId(intakeData.ownerId||null);
   },[]);
   useEffect(()=>{load().catch(e=>setError(e.message));},[load]);
   const action=async(fn,msg)=>{
@@ -59,7 +60,7 @@ export default function PersonalStoreDesk() {
     <button type="button" style={button} disabled={busy} onClick={()=>load().catch(e=>setError(e.message))}>Refresh store activity</button>
     {error&&<p role="alert" style={{color:"#991b1b"}}>{error}</p>}
     {notice&&<p role="status" style={{color:"#047857"}}>{notice}</p>}
-    <h3>Students offering devices to your store ({intakes.filter(x=>x.sellerId!==x.storeQuote?.ownerId).length})</h3>
+    <h3>Students offering devices to your store ({intakes.filter(x=>x.sellerId!==ownerId).length})</h3>
     {!intakes.length&&<p>No intake submissions yet.</p>}
     {intakes.map(row=><article style={{...panel,background:"#f8fafc"}} key={row.id}>
       <b>{row.deviceType==="PHONE"?"📱":"💻"} {row.brand} {row.model}</b>
@@ -68,11 +69,11 @@ export default function PersonalStoreDesk() {
       {row.storeQuote&&<p style={{fontSize:13}}>Your offer: <b>{money(row.storeQuote.price)} — {human(row.storeQuote.status)}</b></p>}
       {row.ownershipStatus!=="REVIEWED"&&<p style={{color:"#92400e",fontSize:12}}>First review the receipt, face-to-camera seller statement and device identifier in Ownership Review below. You cannot offer to purchase until that is done.</p>}
       <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-        {row.ownershipStatus==="REVIEWED"&&!row.storeQuote?.status?.includes("ACQUIRED")&&row.storeQuote?.status!=="SELLER_ACCEPTED"&&row.sellerId!==row.storeQuote?.ownerId&&
+        {row.ownershipStatus==="REVIEWED"&&!row.storeQuote?.status?.includes("ACQUIRED")&&row.storeQuote?.status!=="SELLER_ACCEPTED"&&row.sellerId!==ownerId&&
           <button style={button} disabled={busy} onClick={()=>begin("quote",row)}>Offer a private purchase price</button>}
         {row.storeQuote?.status==="SELLER_ACCEPTED"&&
           <button style={button} disabled={busy} onClick={()=>begin("acquire",row)}>Record purchase and receive device</button>}
-        {row.ownershipStatus==="REVIEWED"&&row.sellerId===row.storeQuote?.ownerId&&
+        {row.ownershipStatus==="REVIEWED"&&row.sellerId===ownerId&&
           <button style={button} disabled={busy} onClick={()=>begin("activate",row)}>Activate my personally owned stock</button>}
       </div>
     </article>)}

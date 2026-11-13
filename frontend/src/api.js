@@ -26,6 +26,27 @@ export const api = {
     method: "POST", body: file, headers: { "Content-Type": "application/octet-stream", "X-Ownership-Document-Type": type },
   }),
   removeLaptopOwnershipProof: (id) => request("/laptops/" + encodeURIComponent(id) + "/ownership-proof", { method: "DELETE" }),
+  getPilotShopMode: () => request("/store/pilot"),
+  sellerRespondStoreQuote: (id, decision) => request("/laptops/" + encodeURIComponent(id) + "/store-quote", {
+    method: "PATCH", body: JSON.stringify({decision}),
+  }),
+  adminGetStoreIntakes: () => request("/admin/v2/store-intake"),
+  adminGetStoreInventory: () => request("/admin/v2/store-inventory"),
+  adminOfferStorePurchase: (id, payload) => request("/admin/v2/store-intake/" + encodeURIComponent(id) + "/quote", {
+    method: "POST", body: JSON.stringify(payload),
+  }),
+  adminAcquireIntoStore: (id, payload) => request("/admin/v2/store-intake/" + encodeURIComponent(id) + "/acquire", {
+    method: "POST", body: JSON.stringify(payload),
+  }),
+  adminActivateOwnStock: (id,payload) => request("/admin/v2/store-inventory/" + encodeURIComponent(id) + "/activate", {
+    method: "POST", body: JSON.stringify(payload),
+  }),
+  adminSetStorePrice: (id, price) => request("/admin/v2/store-inventory/" + encodeURIComponent(id) + "/price", {
+    method: "PATCH", body: JSON.stringify({price}),
+  }),
+  adminSetStoreStatus: (id,status) => request("/admin/v2/store-inventory/" + encodeURIComponent(id) + "/status", {
+    method: "PATCH", body: JSON.stringify({status}),
+  }),
   issueSellerVideoChallenge: (id) => request("/laptops/" + encodeURIComponent(id) + "/seller-video-challenge", { method: "POST", body: "{}" }),
   uploadSellerIntentVideo: (id, blob, challenge) => request("/laptops/" + encodeURIComponent(id) + "/seller-video", {
     method: "POST", body: blob,

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "./api";
+import PersonalStoreDesk from "./PersonalStoreDesk";
 
 const card = { background: "#fff", border: "1px solid #dce9e3", borderRadius: 16, padding: 18, marginBottom: 14 };
 const btn = { background: "#047857", color: "white", border: 0, borderRadius: 9, padding: "10px 14px", fontWeight: 750, cursor: "pointer" };
@@ -91,6 +92,7 @@ export default function DeviceTradingAdmin() {
   };
   const currentOffers = offers.filter(x => !["COMPLETED","REJECTED_BY_ADMIN","DECLINED","WITHDRAWN"].includes(x.status));
   return <section>
+    <PersonalStoreDesk />
     <div style={card}>
       <h2>Phone & Laptop Trading Desk</h2>
       <p style={{fontSize:13,color:"#475569",lineHeight:1.65}}>This desk is restricted to the configured marketplace owner. Review private ownership evidence, approve or reject deals, inspect both devices and confirm real payment and handover. A checked document is not evidence that a device is theft-free.</p>
