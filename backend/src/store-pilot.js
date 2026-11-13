@@ -2,7 +2,9 @@ import { prisma } from "./db.js";
 
 // First-launch business model: one shop, owned and operated by the designated admin.
 // No time-based auto-opening and no independent seller storefront permissions.
-export const PERSONAL_STORE_ONLY = process.env.CAMPUSVERSE_PERSONAL_STORE_ONLY !== "false";
+// Phase one has no opt-out flag: enabling independent shops requires a new
+// owner-approved code release and security review, not a forgotten dashboard switch.
+export const PERSONAL_STORE_ONLY = true;
 
 export async function getPersonalStoreOwnerId(tx = prisma) {
   const email = String(process.env.TRADING_OWNER_EMAIL || "").trim();

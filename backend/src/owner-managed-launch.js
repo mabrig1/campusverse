@@ -1,5 +1,6 @@
 
-export const ownerManagedLaunch = process.env.CAMPUSVERSE_OWNER_MANAGED_LAUNCH !== "false";
+// This lock must remain active throughout the single-store pilot.
+export const ownerManagedLaunch = true;
 const denied = (res) => res.status(423).json({ error: "Self-service transactions are paused during the owner-managed launch. Use the supervised phone and laptop trading desk." });
 
 export function ownerManagedGuard(req,res,next) {

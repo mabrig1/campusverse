@@ -126,7 +126,7 @@ export default function DeviceTradingAdmin() {
       <p style={{fontSize:13,color:"#475569",margin:"8px 0"}}>{label(row.status)} · Buyer: {row.buyer?.name} ({row.buyer?.email}) · Seller: {row.target.seller?.name}</p>
       <p style={{fontSize:13,color:"#475569"}}>{row.type === "BUY" ? "Cash bid" : "Swap top-up"}: ₦{Number(row.amount).toLocaleString()}{row.offered && " · Trade-in: " + row.offered.brand + " " + row.offered.model}</p>
       {row.note && <p style={{fontSize:12,color:"#64748b"}}>Buyer note: {row.note}</p>}
-      <button style={btn} onClick={()=>start("offer",row.id,row.status==="ACCEPTED"?"COMPLETED":"ADMIN_APPROVED")}>Review transaction</button>
+      <button style={btn} onClick={()=>start("offer",row.id,row.status==="ACCEPTED"?"COMPLETED":"ACCEPTED")}>Review transaction</button>
     </article>)}
     {!currentOffers.length && <div style={card}>No active requests.</div>}
     <h3>Device safety reports: {reports.length}</h3>
@@ -141,7 +141,7 @@ export default function DeviceTradingAdmin() {
       <label style={{display:"block",marginBottom:12}}>Decision
         <select value={choice} style={field} onChange={e=>setChoice(e.target.value)}>
           {(selection.kind === "listing" ? ["REVIEWED","NEEDS_MORE_INFO","REJECTED","REVOKED"]
-            : ["ADMIN_APPROVED","REJECTED_BY_ADMIN","DISPUTED","COMPLETED"]).map(x=><option key={x} value={x}>{label(x)}</option>)}
+            : ["ACCEPTED","ADMIN_APPROVED","REJECTED_BY_ADMIN","DISPUTED","COMPLETED"]).map(x=><option key={x} value={x}>{label(x)}</option>)}
         </select>
       </label>
       <label style={{display:"block",marginBottom:12}}>Required explanation (12–600 characters)
