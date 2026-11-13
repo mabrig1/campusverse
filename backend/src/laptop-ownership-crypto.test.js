@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
-import { evidenceKey, normalizedSerial, normalizedDeviceIdentifier, serialFingerprint, recognizedImage, encryptEvidence, decryptEvidence } from "./laptop-ownership-crypto.js";
+import { evidenceKey, normalizedSerial, normalizedDeviceIdentifier, serialFingerprint, recognizedImage, encryptEvidence, decryptEvidence, recognizedSellerVideo, sellerVideoAAD, MAX_SELLER_VIDEO_BYTES } from "./laptop-ownership-crypto.js";
 
 test("serial values normalize and get a private, deterministic fingerprint", () => {
   const key = randomBytes(32);
@@ -38,4 +38,16 @@ test("valid IMEIs are structural checks only, not stolen-phone clearance", () =>
   assert.throws(() => normalizedDeviceIdentifier("PHONE","490154203237519"), /check digit/);
   const key = randomBytes(32);
   assert.notEqual(serialFingerprint("490154203237518",key,"PHONE"),serialFingerprint("490154203237518",key,"LAPTOP"));
+});
+
+
+test("seller selfie video magic signatures and strict size cap", () => {
+  assert.equal(recognizedSellerVideo(Buffer.concat([Buffer.from([0x1a,0x45,0xdf,0xa3]), Buffer.alloc(36)])), "video/webm");
+  assert.equal(recognizedSellerVideo(Buffer.concat([Buffer.from([0,0,0,24]), Buffer.from("ftypisom"), Buffer.alloc(32)])), "video/mp4");
+  assert.equal(recognizedSellerVideo(Buffer.from("<script>bad file</script>")), null);
+  assert.equal(recognizedSellerVideo(Buffer.alloc(MAX_SELLER_VIDEO_BYTES+1)), null);
+  const key = randomBytes(32), bytes = Buffer.from("private seller video");
+  const ciphertext = encryptEvidence(bytes, key, sellerVideoAAD("listing-9"));
+  assert.deepEqual(decryptEvidence(ciphertext,key,sellerVideoAAD("listing-9")),bytes);
+  assert.throws(()=>decryptEvidence(ciphertext,key,"listing-9"), /auth|authenticate|Unsupported|unable/i);
 });

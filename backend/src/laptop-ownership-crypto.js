@@ -62,3 +62,17 @@ export function decryptEvidence({ cipherText, iv, authTag }, key, listingId) {
   decipher.setAuthTag(authTag);
   return Buffer.concat([decipher.update(cipherText), decipher.final()]);
 }
+
+
+// Browser-camera proof is encrypted at rest; it is never publicly hosted.
+// This recognizes container headers only; manual review is still required.
+export const MAX_SELLER_VIDEO_BYTES = 2 * 1024 * 1024;
+export function recognizedSellerVideo(bytes) {
+  if (!Buffer.isBuffer(bytes) || bytes.length < 16 || bytes.length > MAX_SELLER_VIDEO_BYTES) return null;
+  if (bytes.subarray(0,4).equals(Buffer.from([0x1a,0x45,0xdf,0xa3]))) return "video/webm";
+  if (bytes.subarray(4,8).toString("ascii") === "ftyp") return "video/mp4";
+  return null;
+}
+export function sellerVideoAAD(listingId) {
+  return "seller-intent-video:" + listingId;
+}

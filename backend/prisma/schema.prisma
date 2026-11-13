@@ -291,6 +291,8 @@ model LaptopListing {
   incomingOffers   LaptopOffer[]       @relation("TargetLaptopOffers")
   outgoingSwapOffers LaptopOffer[]     @relation("OfferedLaptopOffers")
   ownershipEvidence LaptopOwnershipEvidence?
+  sellerVideoEvidence LaptopSellerVideoEvidence?
+  sellerVideoChallenge LaptopSellerVideoChallenge?
   ownershipReviews LaptopOwnershipReview[]
   safetyReports LaptopSafetyReport[]
   @@index([serialFingerprint])
@@ -358,6 +360,7 @@ model LaptopOwnershipReview {
   note             String
   serialMatched    Boolean               @default(false)
   provenanceChecked Boolean              @default(false)
+  sellerIntentConfirmed Boolean          @default(false)
   createdAt        DateTime              @default(now())
   @@index([listingId, createdAt])
 }
@@ -375,4 +378,30 @@ model LaptopSafetyReport {
   resolvedAt  DateTime?
   @@unique([listingId, reporterId])
   @@index([status, createdAt])
+}
+
+
+// Short-lived, per-device challenge used for an in-browser fresh seller authorisation video.
+// A successful upload consumes this challenge. Never exposed to public marketplace APIs.
+model LaptopSellerVideoChallenge {
+  id         String        @id @default(cuid())
+  listing    LaptopListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  listingId  String        @unique
+  challenge  String
+  expiresAt  DateTime
+  issuedAt   DateTime      @default(now())
+}
+
+model LaptopSellerVideoEvidence {
+  id          String        @id @default(cuid())
+  listing     LaptopListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  listingId   String        @unique
+  cipherText  Bytes
+  iv          Bytes
+  authTag     Bytes
+  mimeType    String
+  byteLength  Int
+  challenge   String
+  consentedAt DateTime
+  uploadedAt  DateTime      @default(now())
 }
