@@ -9,11 +9,27 @@ on:
       - 'backend/src/laptop-routes.js'
       - 'backend/src/laptop-ownership-*.js'
       - 'backend/server.js'
+      - 'backend/src/device-offer-admin-routes.js'
+      - 'backend/src/trading-owner.js'
       - 'frontend/**'
       - '.github/workflows/laptop-exchange-ci.yml'
 jobs:
   validate:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: campusverse
+          POSTGRES_PASSWORD: campusverse
+          POSTGRES_DB: campusverse
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U campusverse -d campusverse"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
     env:
       DATABASE_URL: postgresql://campusverse:campusverse@localhost:5432/campusverse?schema=public
       JWT_SECRET: laptop-ci-only-not-a-production-secret
@@ -28,6 +44,8 @@ jobs:
         run: npm ci
       - name: Prisma schema validation (no DB mutation)
         run: cd backend && npx prisma validate --schema prisma/schema.prisma
+      - name: Apply migrations to disposable CI PostgreSQL
+        run: cd backend && npx prisma migrate deploy && npx prisma generate
       - name: Backend syntax
         run: |
           node --check backend/server.js
