@@ -170,7 +170,10 @@ export function registerLaptopRoutes(app) {
     if (type === "SWAP") {
       if (!target.allowSwap) return res.status(400).json({ error: "Seller is not accepting swaps" });
       if (!offeredId) return res.status(400).json({ error: "Choose your own active laptop listing" });
-      const offered = await prisma.laptopListing.findUnique({ where: { id: offeredId } });
+      const offered = await prisma.laptopListing.findUnique({ where: { id: offeredId },
+        include:{storeQuote:{select:{status:true}}} });
+      if (PERSONAL_STORE_ONLY && offered?.storeQuote?.status === "SELLER_ACCEPTED")
+        return res.status(409).json({ error: "You already accepted CampusVerse's cash purchase quote for that device; it cannot also be a swap trade-in" });
       if (!offered || offered.sellerId !== req.userId || !isReviewed(offered))
         return res.status(400).json({ error: "Swap device must be your own active listing" });
     }

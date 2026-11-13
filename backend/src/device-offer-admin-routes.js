@@ -68,9 +68,11 @@ export function registerDeviceOfferAdminRoutes(app) {
         // On a completed swap, the buyer physically hands in their reviewed
         // device as part payment. Record it as newly acquired store stock.
         if (offer.type === "SWAP" && offer.offered) {
-          const incoming = await tx.laptopListing.findUnique({ where: { id: offer.offeredId } });
+          const incoming = await tx.laptopListing.findUnique({ where: { id: offer.offeredId },
+            include:{storeQuote:{select:{status:true}}} });
           if (!incoming || incoming.ownershipStatus !== "REVIEWED" || incoming.storeInventory ||
-              !incoming.identifierMatchedAt || incoming.sellerId !== offer.buyerId)
+              !incoming.identifierMatchedAt || incoming.storeQuote?.status==="SELLER_ACCEPTED" ||
+              incoming.sellerId !== offer.buyerId)
             throw new Error("Swap trade-in verification changed; completion cancelled");
           await tx.laptopListing.create({data:{
             sellerId: req.userId, deviceType: incoming.deviceType, brand: incoming.brand,

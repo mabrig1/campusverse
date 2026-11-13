@@ -53,9 +53,19 @@ export function registerPersonalStoreRoutes(app) {
     if(listing.sellerId!==req.userId) return res.status(403).json({error:"Only the submitting seller can respond"});
     if(listing.status==="CLOSED" || listing.storeInventory)
       return res.status(409).json({error:"This submission is no longer available"});
-    const updated=await prisma.storeIntakeQuote.updateMany({
-      where:{listingId:req.params.id,status:"OFFERED"},
-      data:{status:parsed.data.decision,...(parsed.data.decision==="SELLER_ACCEPTED"?{agreedAt:new Date()}:{} )},
+    const updated=await prisma.$transaction(async tx=>{
+      const result=await tx.storeIntakeQuote.updateMany({
+        where:{listingId:req.params.id,status:"OFFERED"},
+        data:{status:parsed.data.decision,...(parsed.data.decision==="SELLER_ACCEPTED"?{agreedAt:new Date()}:{} )},
+      });
+      if(result.count && parsed.data.decision==="SELLER_ACCEPTED"){
+        // Do not allow a student to pledge the same device both as a swap
+        // trade-in and as a direct cash sale to our store.
+        await tx.laptopOffer.updateMany({where:{
+          offeredId:req.params.id,status:{in:["PENDING","ADMIN_APPROVED"]},
+        },data:{status:"WITHDRAWN"}});
+      }
+      return result;
     });
     if(!updated.count) return res.status(409).json({error:"No active store quote to respond to"});
     res.json({status:parsed.data.decision,message:parsed.data.decision==="SELLER_ACCEPTED"
@@ -155,6 +165,10 @@ export function registerPersonalStoreRoutes(app) {
           data:{status:"CLOSED"},
         });
         if(!closed.count) throw Object.assign(new Error("Seller submission changed during acquisition"),{status:409});
+        await tx.laptopOffer.updateMany({
+          where:{offeredId:listing.id,status:{in:["PENDING","ADMIN_APPROVED"]}},
+          data:{status:"WITHDRAWN"},
+        });
         const inventory=await tx.laptopListing.create({data:{
           sellerId:req.userId,deviceType:listing.deviceType,brand:listing.brand,model:listing.model,
           processor:listing.processor,ramGb:listing.ramGb,storageGb:listing.storageGb,
