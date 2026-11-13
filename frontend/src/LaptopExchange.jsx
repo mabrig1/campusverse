@@ -15,7 +15,7 @@ const conditions = { EXCELLENT: 'Excellent', GOOD: 'Good', FAIR: 'Fair', NEEDS_R
 const money = (n) => '₦' + Number(n || 0).toLocaleString('en-NG', { maximumFractionDigits: 0 });
 
 export default function LaptopExchange({ user }) {
-  const [view, setView] = useState('browse');
+  const [view, setView] = useState(user?.storeIntent === 'SELL_TO_STORE' ? 'sell' : 'browse');
   const [items, setItems] = useState([]);
   const [mine, setMine] = useState([]);
   const [offers, setOffers] = useState([]);
