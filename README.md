@@ -132,3 +132,7 @@ A listing begins `NOT_SUBMITTED`, becomes `PENDING` after upload, and is only pu
 - Buyers submit offers; the owner approves before the seller can accept. An accepted offer is **not** a sale. Only the owner can mark completion after checking physical inspection, real payment receipt and handover. All owner deal decisions are audited.
 - `LAPTOP_PROOF_ENCRYPTION_KEY_BASE64` and `TRADING_OWNER_EMAIL` are required in the backend environment. Missing configuration blocks affected actions. Do not place secrets or NIN/BVN on the frontend.
 - **First release dependencies**: safely apply the pending Postgres migrations in sequence, validate owner login, test proof upload/admin review and the full two-account buy/swap workflow, then deploy frontend and backend together. Do not merge a green UI build directly to production without migration and operational readiness. No production release has been performed.
+
+## Cloudflare Worker resource optimisation (staged, not production)
+
+A Cloudflare API gateway and optional static frontend Worker have been added. Caching is limited to anonymous static marketplace categories and public service metadata. **Phone/laptop listings, ownership proofs, admin actions, offers and all transactions are never cached.** Neither Worker is attached to the live domain. See [Cloudflare deployment, verification and rollback guide](docs/cloudflare-worker-rollout.md).
