@@ -44,6 +44,7 @@ model User {
   laptopListings LaptopListing[] @relation("LaptopListingsBySeller")
   laptopOffers LaptopOffer[] @relation("LaptopOffersByBuyer")
   laptopSafetyReports LaptopSafetyReport[] @relation("LaptopReportsByUser")
+  storeQuotesFromOwner StoreIntakeQuote[] @relation("StoreQuotesByOwner")
 }
 
 model Wallet {
@@ -246,6 +247,13 @@ enum DeviceType {
   LAPTOP
   PHONE
 }
+enum StoreQuoteStatus {
+  OFFERED
+  SELLER_ACCEPTED
+  SELLER_DECLINED
+  ACQUIRED
+  CANCELLED
+}
 enum LaptopOfferStatus {
   PENDING
   ADMIN_APPROVED
@@ -290,6 +298,11 @@ model LaptopListing {
   updatedAt        DateTime            @updatedAt
   incomingOffers   LaptopOffer[]       @relation("TargetLaptopOffers")
   outgoingSwapOffers LaptopOffer[]     @relation("OfferedLaptopOffers")
+  // Under the owner-managed pilot only stock in the owner's custody is public.
+  storeInventory Boolean @default(false)
+  storeAcquiredAt DateTime?
+  originListingId String? @unique
+  storeQuote StoreIntakeQuote?
   ownershipEvidence LaptopOwnershipEvidence?
   sellerVideoEvidence LaptopSellerVideoEvidence?
   sellerVideoChallenge LaptopSellerVideoChallenge?
@@ -404,4 +417,21 @@ model LaptopSellerVideoEvidence {
   challenge   String
   consentedAt DateTime
   uploadedAt  DateTime      @default(now())
+}
+
+
+// Price negotiated between the single trading-desk owner and the student.
+model StoreIntakeQuote {
+  id String @id @default(cuid())
+  listing LaptopListing @relation(fields: [listingId], references: [id])
+  listingId String @unique
+  owner User @relation("StoreQuotesByOwner", fields: [ownerId], references: [id])
+  ownerId String
+  price Float
+  status StoreQuoteStatus @default(OFFERED)
+  note String @default("")
+  offeredAt DateTime @default(now())
+  agreedAt DateTime?
+  acquiredAt DateTime?
+  handoverNote String?
 }
