@@ -275,6 +275,8 @@ model LaptopListing {
   imageUrl         String?
   serialLast4      String?
   serialFingerprint String?
+  identifierMatchedAt DateTime?
+  identifierMatchedBy String?
   lockStatus       LaptopLockStatus    @default(NOT_CHECKED)
   ownershipDeclared Boolean           @default(false)
   ownershipStatus OwnershipReviewStatus @default(NOT_SUBMITTED)

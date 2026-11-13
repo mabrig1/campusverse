@@ -1,9 +1,10 @@
 import express from "express";
+import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { prisma } from "./db.js";
 import { requireAuth, requireAdminAuth } from "./auth.js";
 import { requireTradingOwner } from "./trading-owner.js";
-import { MAX_EVIDENCE_BYTES, PROOF_TYPES, evidenceKey, recognizedImage, encryptEvidence, decryptEvidence } from "./laptop-ownership-crypto.js";
+import { MAX_EVIDENCE_BYTES, PROOF_TYPES, evidenceKey, recognizedImage, encryptEvidence, decryptEvidence, normalizedDeviceIdentifier, serialFingerprint } from "./laptop-ownership-crypto.js";
 
 const safe = fn => (req, res, next) => Promise.resolve(fn(req, res)).catch(next);
 const invalid = (res, parsed) => res.status(400).json({ error: parsed.error.issues[0]?.message || "Invalid input" });
@@ -20,7 +21,7 @@ const reviewSchema = z.object({
 
 const metadataSelect = {
   id: true, deviceType: true, brand: true, model: true, serialLast4: true, location: true, status: true,
-  ownershipStatus: true, ownershipReviewedAt: true, createdAt: true,
+  ownershipStatus: true, ownershipReviewedAt: true, identifierMatchedAt: true, createdAt: true,
   ownershipEvidence: { select: { id: true, documentType: true, mimeType: true, byteLength: true, uploadedAt: true } },
   seller: { select: { id: true, name: true, email: true } },
 };
@@ -62,7 +63,7 @@ export function registerLaptopOwnershipRoutes(app) {
         });
         await tx.laptopListing.update({
           where: { id: req.params.id, sellerId: req.userId },
-          data: { ownershipStatus: "PENDING", ownershipReviewedAt: null, ownershipReviewNote: null },
+          data: { ownershipStatus: "PENDING", ownershipReviewedAt: null, ownershipReviewNote: null, identifierMatchedAt: null, identifierMatchedBy: null },
         });
         await cancelPendingOffers(tx, req.params.id);
       });
@@ -80,7 +81,7 @@ export function registerLaptopOwnershipRoutes(app) {
         where: { id: req.params.id },
         data: {
           ownershipStatus: ["FLAGGED", "REVOKED"].includes(listing.ownershipStatus) ? listing.ownershipStatus : "NOT_SUBMITTED",
-          ownershipReviewedAt: null, ownershipReviewNote: null,
+          ownershipReviewedAt: null, ownershipReviewNote: null, identifierMatchedAt: null, identifierMatchedBy: null,
         },
       });
       await cancelPendingOffers(tx, req.params.id);
@@ -135,6 +136,33 @@ export function registerLaptopOwnershipRoutes(app) {
     res.json({ items: records });
   }));
 
+  app.post("/api/admin/v2/laptop-ownership/:id/match-identifier", requireAdminAuth, requireTradingOwner, safe(async (req, res) => {
+    const parsed = z.object({ identifier: z.string().min(6).max(50) }).strict().safeParse(req.body);
+    if (!parsed.success) return invalid(res, parsed);
+    const listing = await prisma.laptopListing.findUnique({ where: { id: req.params.id },
+      select: { deviceType: true, serialFingerprint: true, ownershipStatus: true, status: true } });
+    if (!listing) return res.status(404).json({ error: "Device not found" });
+    if (listing.status === "CLOSED" || !["PENDING", "NEEDS_MORE_INFO", "FLAGGED"].includes(listing.ownershipStatus))
+      return res.status(409).json({ error: "Device is not awaiting fresh review" });
+    let matched = false;
+    try {
+      const identifier = normalizedDeviceIdentifier(listing.deviceType, parsed.data.identifier);
+      const fingerprint = serialFingerprint(identifier, evidenceKey(), listing.deviceType);
+      if (listing.serialFingerprint) {
+        const left = Buffer.from(fingerprint, "hex"), right = Buffer.from(listing.serialFingerprint, "hex");
+        matched = left.length === right.length && timingSafeEqual(left, right);
+      }
+    } catch (error) {
+      return res.status(error.message.includes("not configured") ? 503 : 400).json({ error: error.message });
+    }
+    if (matched) await prisma.laptopListing.update({ where: { id: req.params.id },
+      data: { identifierMatchedAt: new Date(), identifierMatchedBy: req.userId } });
+    res.setHeader("Cache-Control","no-store");
+    res.json({ match: matched, message: matched
+      ? "Identifier matches the original listing. Inspect possession and lawful transfer history separately."
+      : "Identifier mismatch: do not approve until investigated." });
+  }));
+
   app.get("/api/admin/v2/laptop-ownership/:id/document", requireAdminAuth, requireTradingOwner, safe(async (req, res) => {
     let key;
     try { key = evidenceKey(); } catch (e) {
@@ -164,7 +192,7 @@ export function registerLaptopOwnershipRoutes(app) {
     });
     if (!record) return res.status(404).json({ error: "Listing not found" });
     if (decision === "REVIEWED") {
-      if (!record.ownershipEvidence || !record.serialFingerprint || !serialMatched || !provenanceChecked)
+      if (!record.ownershipEvidence || !record.serialFingerprint || !record.identifierMatchedAt || !serialMatched || !provenanceChecked)
         return res.status(409).json({ error: "Document, serial match and provenance checks are required for review approval" });
       if (record.status === "CLOSED") return res.status(409).json({ error: "Closed listings cannot be approved" });
       if (!["PENDING", "NEEDS_MORE_INFO", "FLAGGED", "REJECTED", "REVOKED"].includes(record.ownershipStatus))
