@@ -2,6 +2,7 @@ import express from "express";
 import { z } from "zod";
 import { prisma } from "./db.js";
 import { requireAuth, requireAdminAuth } from "./auth.js";
+import { requireTradingOwner } from "./trading-owner.js";
 import { MAX_EVIDENCE_BYTES, PROOF_TYPES, evidenceKey, recognizedImage, encryptEvidence, decryptEvidence } from "./laptop-ownership-crypto.js";
 
 const safe = fn => (req, res, next) => Promise.resolve(fn(req, res)).catch(next);
@@ -113,7 +114,7 @@ export function registerLaptopOwnershipRoutes(app) {
   }));
 
   // Admin endpoints re-check current DB role and require an 8-hour admin-scoped token.
-  app.get("/api/admin/v2/laptop-ownership", requireAdminAuth, safe(async (req, res) => {
+  app.get("/api/admin/v2/laptop-ownership", requireAdminAuth, requireTradingOwner, safe(async (req, res) => {
     const records = await prisma.laptopListing.findMany({
       where: { ownershipStatus: { in: ["PENDING", "NEEDS_MORE_INFO", "REJECTED", "FLAGGED", "REVOKED"] } },
       select: metadataSelect, orderBy: { updatedAt: "desc" }, take: 80,
@@ -122,7 +123,7 @@ export function registerLaptopOwnershipRoutes(app) {
     res.json({ items: records });
   }));
 
-  app.get("/api/admin/v2/laptop-reports", requireAdminAuth, safe(async (req, res) => {
+  app.get("/api/admin/v2/laptop-reports", requireAdminAuth, requireTradingOwner, safe(async (req, res) => {
     const records = await prisma.laptopSafetyReport.findMany({
       where: { status: "OPEN" }, take: 80, orderBy: { createdAt: "desc" },
       select: {
@@ -134,7 +135,7 @@ export function registerLaptopOwnershipRoutes(app) {
     res.json({ items: records });
   }));
 
-  app.get("/api/admin/v2/laptop-ownership/:id/document", requireAdminAuth, safe(async (req, res) => {
+  app.get("/api/admin/v2/laptop-ownership/:id/document", requireAdminAuth, requireTradingOwner, safe(async (req, res) => {
     let key;
     try { key = evidenceKey(); } catch (e) {
       if (isMissingKey(e)) return res.status(503).json({ error: "Encrypted document retrieval not configured" });
@@ -154,7 +155,7 @@ export function registerLaptopOwnershipRoutes(app) {
     res.send(bytes);
   }));
 
-  app.post("/api/admin/v2/laptop-ownership/:id/review", requireAdminAuth, safe(async (req, res) => {
+  app.post("/api/admin/v2/laptop-ownership/:id/review", requireAdminAuth, requireTradingOwner, safe(async (req, res) => {
     const parsed = reviewSchema.safeParse(req.body);
     if (!parsed.success) return invalid(res, parsed);
     const { decision, note, serialMatched, provenanceChecked } = parsed.data;
@@ -189,7 +190,7 @@ export function registerLaptopOwnershipRoutes(app) {
     res.json({ ownershipStatus: decision, message: "Admin decision recorded. Document review alone cannot guarantee a laptop is not stolen." });
   }));
 
-  app.post("/api/admin/v2/laptop-reports/:id/resolve", requireAdminAuth, safe(async (req, res) => {
+  app.post("/api/admin/v2/laptop-reports/:id/resolve", requireAdminAuth, requireTradingOwner, safe(async (req, res) => {
     const record = await prisma.laptopSafetyReport.findUnique({ where: { id: req.params.id } });
     if (!record) return res.status(404).json({ error: "Report not found" });
     const updated = await prisma.laptopSafetyReport.updateMany({

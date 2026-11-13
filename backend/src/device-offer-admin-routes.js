@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { prisma } from "./db.js";
 import { requireAdminAuth } from "./auth.js";
+import { requireTradingOwner } from "./trading-owner.js";
 
 const handler = fn => (req,res,next) => Promise.resolve(fn(req,res)).catch(next);
 const schema = z.object({
@@ -18,11 +19,11 @@ const includes = {
 };
 const available = d => !!d && d.status === "ACTIVE" && d.ownershipStatus === "REVIEWED";
 export function registerDeviceOfferAdminRoutes(app) {
-  app.get("/api/admin/v2/device-offers", requireAdminAuth, handler(async (_req,res) => {
+  app.get("/api/admin/v2/device-offers", requireAdminAuth, requireTradingOwner, handler(async (_req,res) => {
     const items = await prisma.laptopOffer.findMany({ include: includes, orderBy: { createdAt: "desc" }, take: 150 });
     res.setHeader("Cache-Control", "no-store"); res.json({ items });
   }));
-  app.post("/api/admin/v2/device-offers/:id/decision", requireAdminAuth, handler(async (req,res) => {
+  app.post("/api/admin/v2/device-offers/:id/decision", requireAdminAuth, requireTradingOwner, handler(async (req,res) => {
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message || "Invalid action" });
     const { action, note, inspectionConfirmed, paymentConfirmed, handoverConfirmed } = parsed.data;
