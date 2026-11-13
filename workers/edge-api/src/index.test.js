@@ -144,3 +144,36 @@ test("cache policy strictly allows only approved public metadata paths", () => {
   assert.equal(mayStoreResponse(json({},{"cache-control":"no-store"})),false);
   assert.equal(mayStoreResponse(json({},{"vary":"Origin"})),false);
 });
+
+
+test("public metadata over 256 KiB is streamed to visitor but never stored", async () => {
+  const t = setup();
+  const tooLarge = { items: ["a".repeat(270_000)] };
+  t.runtime.fetchImpl = async () => json(tooLarge);
+  const res = await handleRequest(new Request(url("/api/services")), env, t.ctx, t.runtime);
+  assert.equal(res.headers.get("x-campusverse-edge-cache"), "BYPASS");
+  assert.deepEqual(await res.json(), tooLarge);
+  assert.equal(t.cache.writes, 0);
+});
+
+test("a forged short Content-Length cannot bypass the actual byte bound", async () => {
+  const t = setup();
+  t.runtime.fetchImpl = async () => json({ data: "x".repeat(270_000) }, { "content-length": "15" });
+  const res = await handleRequest(new Request(url("/api/marketplace-categories")), env, t.ctx, t.runtime);
+  assert.equal(res.headers.get("x-campusverse-edge-cache"), "BYPASS");
+  assert.equal(t.cache.writes, 0);
+});
+
+test("compressed or partial responses are not cached as public metadata", async () => {
+  const t = setup();
+  const list = [
+    json({ x: 1 }, { "content-encoding": "gzip" }),
+    json({ x: 2 }, { "content-range": "bytes 0-10/20" }),
+  ];
+  for (const data of list) {
+    t.runtime.fetchImpl = async () => data.clone();
+    const res = await handleRequest(new Request(url("/api/services")), env, t.ctx, t.runtime);
+    assert.equal(res.headers.get("x-campusverse-edge-cache"), "BYPASS");
+  }
+  assert.equal(t.cache.writes, 0);
+});

@@ -23,6 +23,11 @@ export function mayStoreResponse(response) {
   const type = (response.headers.get("content-type") || "").toLowerCase();
   if (!/^application\/json(?:\s*;|$)/.test(type)) return false;
   if (response.headers.has("set-cookie") || response.headers.has("www-authenticate")) return false;
+  // Keep cached bytes identical to the decoded payload: compressed encodings
+  // or partial-content metadata can produce incorrect Content-Length handling.
+  if (response.headers.has("content-range") ||
+      (response.headers.has("content-encoding") && response.headers.get("content-encoding") !== "identity"))
+    return false;
   if (/\b(private|no-store|no-cache)\b/i.test(response.headers.get("cache-control") || "")) return false;
   const vary = (response.headers.get("vary") || "").trim().toLowerCase();
   if (vary && vary !== "accept-encoding") return false;
@@ -53,6 +58,44 @@ const jsonError = (status, message) => new Response(JSON.stringify({ error: mess
 });
 
 const copyResponse = (response) => new Response(response.body, response);
+
+// Content-Length can be missing or falsified, so inspect the *actual* response bytes.
+// Only small public metadata is ever buffered. Preserve the original streaming
+// response for the visitor if the bounded cache inspection cannot complete.
+async function boundedPublicCopy(response, ttl) {
+  if (!response.body) return null;
+  const reader = response.clone().body.getReader();
+  const chunks = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_CACHED_BODY_BYTES) {
+        await reader.cancel("Metadata exceeds the cache limit");
+        return null;
+      }
+      chunks.push(value);
+    }
+    if (!size) return null;
+    const bytes = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    const headers = new Headers(response.headers);
+    headers.delete("content-length");
+    headers.set("cache-control", "public, max-age=0, s-maxage=" + ttl);
+    headers.set("x-content-type-options", "nosniff");
+    return new Response(bytes, { status: response.status, statusText: response.statusText, headers });
+  } catch {
+    await reader.cancel("Cache read failed").catch(() => {});
+    return null;
+  }
+}
+
 
 export async function handleRequest(request, env = {}, ctx = {}, runtime = {}) {
   const url = new URL(request.url);
@@ -112,17 +155,17 @@ export async function handleRequest(request, env = {}, ctx = {}, runtime = {}) {
   // Only two explicitly public, non-personal catalog endpoints are cacheable.
   // Device listings must never be cached: a theft report can revoke them immediately.
   if (ttl && cache && mayStoreResponse(upstream)) {
-    const cacheable = copyResponse(upstream);
-    cacheable.headers.set("cache-control", "public, max-age=0, s-maxage=" + ttl);
-    cacheable.headers.set("x-content-type-options", "nosniff");
-    const stored = cacheable.clone();
-    try {
-      const write = cache.put(cacheKey, stored);
-      if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(write.catch(() => {}));
-      else await write.catch(() => {});
-    } catch { /* No functional impact: serve origin response. */ }
-    cacheable.headers.set("x-campusverse-edge-cache", "MISS");
-    return cacheable;
+    const cacheable = await boundedPublicCopy(upstream, ttl);
+    if (cacheable) {
+      const stored = cacheable.clone();
+      try {
+        const write = cache.put(cacheKey, stored);
+        if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(write.catch(() => {}));
+        else await write.catch(() => {});
+      } catch { /* Cache errors must not prevent public metadata delivery. */ }
+      cacheable.headers.set("x-campusverse-edge-cache", "MISS");
+      return cacheable;
+    }
   }
 
   const response = copyResponse(upstream);
