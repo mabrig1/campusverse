@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - feat/campusverse-laptop-exchange-20261112
+      - feat/campusverse-owner-controlled-phones-laptops-20261113
   pull_request:
     paths:
       - 'backend/prisma/**'
@@ -14,6 +15,8 @@ on:
       - 'backend/src/owner-managed-launch.js'
       - 'frontend/**'
       - '.github/workflows/laptop-exchange-ci.yml'
+permissions:
+  contents: read
 jobs:
   validate:
     runs-on: ubuntu-latest
