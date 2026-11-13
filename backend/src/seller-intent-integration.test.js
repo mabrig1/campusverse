@@ -128,7 +128,7 @@ test("seller authorises sale by document + fresh selfie; owner manually approves
     body:{decision:"REVIEWED",note:"Personally checked selfie video and transfer records",serialMatched:true,provenanceChecked:true,sellerIntentConfirmed:true}});
   assert.equal(result.status,200,result.data.error);
   result=await send("/api/laptops");
-  assert.equal(result.data.items.some(x=>x.id===record.id),true,"Only after review does device become visible");
+  assert.equal(result.data.items.some(x=>x.id===record.id),false,"Seller approval is private: only inventory acquired by CampusVerse appears publicly");
 
   result=await send(listingPath+"/seller-video",{method:"DELETE",token:strangerToken});
   assert.equal(result.status,403);
