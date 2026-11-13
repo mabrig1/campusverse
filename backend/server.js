@@ -13,6 +13,7 @@ import { z } from "zod";
 import { prisma } from "./src/db.js";
 import { registerLaptopRoutes } from "./src/laptop-routes.js";
 import { registerLaptopOwnershipRoutes } from "./src/laptop-ownership-routes.js";
+import { registerSellerIntentRoutes } from "./src/seller-intent-routes.js";
 import { registerDeviceOfferAdminRoutes } from "./src/device-offer-admin-routes.js";
 import { ownerManagedGuard, ownerManagedLaunch } from "./src/owner-managed-launch.js";
 import { signToken, requireAuth, optionalAuth } from "./src/auth.js";
@@ -880,6 +881,7 @@ app.get("/api/directory", (req, res) => res.json(mockDirectory));
 // Dedicated buy/sell/swap exchange; no funds or title move when an offer is accepted.
 registerLaptopRoutes(app);
 registerLaptopOwnershipRoutes(app);
+registerSellerIntentRoutes(app);
 registerDeviceOfferAdminRoutes(app);
 
 // Catches anything that reaches here — including async rejections forwarded

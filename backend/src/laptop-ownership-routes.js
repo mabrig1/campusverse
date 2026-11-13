@@ -17,12 +17,14 @@ const reviewSchema = z.object({
   note: z.string().trim().min(12).max(600),
   serialMatched: z.boolean().default(false),
   provenanceChecked: z.boolean().default(false),
+  sellerIntentConfirmed: z.boolean().default(false),
 }).strict();
 
 const metadataSelect = {
   id: true, deviceType: true, brand: true, model: true, serialLast4: true, location: true, status: true,
   ownershipStatus: true, ownershipReviewedAt: true, identifierMatchedAt: true, createdAt: true,
   ownershipEvidence: { select: { id: true, documentType: true, mimeType: true, byteLength: true, uploadedAt: true } },
+  sellerVideoEvidence: { select: { id: true, mimeType: true, byteLength: true, challenge: true, uploadedAt: true, consentedAt: true } },
   seller: { select: { id: true, name: true, email: true } },
 };
 const isMissingKey = error => error.message === "Ownership evidence storage not configured";
@@ -61,6 +63,9 @@ export function registerLaptopOwnershipRoutes(app) {
           create: { listingId: req.params.id, documentType: type, ...encrypted, mimeType, byteLength: req.body.length },
           update: { documentType: type, ...encrypted, mimeType, byteLength: req.body.length, uploadedAt: new Date() },
         });
+        // Replacing the ownership document requires a fresh authorisation video.
+        await tx.laptopSellerVideoEvidence.deleteMany({ where: { listingId: req.params.id } });
+        await tx.laptopSellerVideoChallenge.deleteMany({ where: { listingId: req.params.id } });
         await tx.laptopListing.update({
           where: { id: req.params.id, sellerId: req.userId },
           data: { ownershipStatus: "PENDING", ownershipReviewedAt: null, ownershipReviewNote: null, identifierMatchedAt: null, identifierMatchedBy: null },
@@ -77,6 +82,8 @@ export function registerLaptopOwnershipRoutes(app) {
     if (listing.sellerId !== req.userId) return res.status(403).json({ error: "Only the seller may erase this document" });
     await prisma.$transaction(async tx => {
       await tx.laptopOwnershipEvidence.deleteMany({ where: { listingId: req.params.id } });
+      await tx.laptopSellerVideoEvidence.deleteMany({ where: { listingId: req.params.id } });
+      await tx.laptopSellerVideoChallenge.deleteMany({ where: { listingId: req.params.id } });
       await tx.laptopListing.update({
         where: { id: req.params.id },
         data: {
@@ -186,14 +193,14 @@ export function registerLaptopOwnershipRoutes(app) {
   app.post("/api/admin/v2/laptop-ownership/:id/review", requireAdminAuth, requireTradingOwner, safe(async (req, res) => {
     const parsed = reviewSchema.safeParse(req.body);
     if (!parsed.success) return invalid(res, parsed);
-    const { decision, note, serialMatched, provenanceChecked } = parsed.data;
+    const { decision, note, serialMatched, provenanceChecked, sellerIntentConfirmed } = parsed.data;
     const record = await prisma.laptopListing.findUnique({
-      where: { id: req.params.id }, include: { ownershipEvidence: { select: { id: true } } },
+      where: { id: req.params.id }, include: { ownershipEvidence: { select: { id: true } }, sellerVideoEvidence: { select: { id: true, challenge: true } } },
     });
     if (!record) return res.status(404).json({ error: "Listing not found" });
     if (decision === "REVIEWED") {
-      if (!record.ownershipEvidence || !record.serialFingerprint || !record.identifierMatchedAt || !serialMatched || !provenanceChecked)
-        return res.status(409).json({ error: "Document, serial match and provenance checks are required for review approval" });
+      if (!record.ownershipEvidence || !record.sellerVideoEvidence || !sellerIntentConfirmed || !record.serialFingerprint || !record.identifierMatchedAt || !serialMatched || !provenanceChecked)
+        return res.status(409).json({ error: "Ownership document, fresh seller-authorisation selfie video, physical serial match and provenance review are all required for approval" });
       if (record.status === "CLOSED") return res.status(409).json({ error: "Closed listings cannot be approved" });
       if (!["PENDING", "NEEDS_MORE_INFO", "FLAGGED", "REJECTED", "REVOKED"].includes(record.ownershipStatus))
         return res.status(409).json({ error: "This listing is not awaiting review" });
@@ -204,8 +211,16 @@ export function registerLaptopOwnershipRoutes(app) {
       if (conflict) return res.status(409).json({ error: "Duplicate device fingerprint on another open listing. Investigate before approving." });
     }
     await prisma.$transaction(async tx => {
+      // Recheck sensitive evidence in the same transaction before granting access.
+      if (decision === "REVIEWED") {
+        const [document, video] = await Promise.all([
+          tx.laptopOwnershipEvidence.findUnique({ where: { listingId: record.id }, select: { id: true } }),
+          tx.laptopSellerVideoEvidence.findUnique({ where: { listingId: record.id }, select: { id: true } }),
+        ]);
+        if (!document || !video) throw Object.assign(new Error("Owner evidence changed during review"), { status: 409 });
+      }
       await tx.laptopOwnershipReview.create({
-        data: { listingId: record.id, reviewerId: req.userId, action: decision, note, serialMatched, provenanceChecked },
+        data: { listingId: record.id, reviewerId: req.userId, action: decision, note, serialMatched, provenanceChecked, sellerIntentConfirmed },
       });
       await tx.laptopListing.update({
         where: { id: record.id }, data: {
@@ -215,7 +230,7 @@ export function registerLaptopOwnershipRoutes(app) {
       });
       if (decision !== "REVIEWED") await cancelPendingOffers(tx, record.id);
     });
-    res.json({ ownershipStatus: decision, message: "Admin decision recorded. Document review alone cannot guarantee a laptop is not stolen." });
+    res.json({ ownershipStatus: decision, message: "Documents and seller-authorisation video reviewed. This is not official stolen-device clearance or automated identity verification." });
   }));
 
   app.post("/api/admin/v2/laptop-reports/:id/resolve", requireAdminAuth, requireTradingOwner, safe(async (req, res) => {

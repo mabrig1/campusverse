@@ -9,6 +9,7 @@ on:
       - 'backend/prisma/**'
       - 'backend/src/laptop-routes.js'
       - 'backend/src/laptop-ownership-*.js'
+      - 'backend/src/seller-intent-routes.js'
       - 'backend/server.js'
       - 'backend/src/device-offer-admin-routes.js'
       - 'backend/src/trading-owner.js'
@@ -59,6 +60,7 @@ jobs:
           node --check backend/src/laptop-routes.js
           node --check backend/src/laptop-ownership-routes.js
           node --check backend/src/laptop-ownership-crypto.js
+          node --check backend/src/seller-intent-routes.js
           node --check backend/src/device-offer-admin-routes.js
           node --check backend/src/trading-owner.js
           node --check backend/src/owner-managed-launch.js
