@@ -16,9 +16,9 @@ function CampusVerseRoot() {
   if (path.startsWith('/admin')) return <AdminPortal />
 
   const [storefront, setStorefront] = useState(true)
-  const [initialTab, setInitialTab] = useState('dashboard')
+  const [initialTab, setInitialTab] = useState('laptops')
   return storefront ? (
-    <CampusVerseStorefront onLogin={(tab = 'dashboard') => { setInitialTab(tab); setStorefront(false) }} />
+    <CampusVerseStorefront onLogin={(tab = 'laptops') => { setInitialTab(tab); setStorefront(false) }} />
   ) : (
     <App initialTab={initialTab} />
   )
